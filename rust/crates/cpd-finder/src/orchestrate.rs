@@ -77,6 +77,11 @@ pub struct RunConfig {
     /// Scan only these files, by canonical path, those of them a walk would
     /// take (`--changed-only`). `None` walks the paths.
     pub only_files: Option<Arc<std::collections::HashSet<PathBuf>>>,
+    /// The files, by canonical path, whose clones the run reports in the
+    /// end (`--changed`): a clone pass may then find only the pairs with an
+    /// end in one of them ([`PassContext::focus`], issue #1303). The token
+    /// passes find every clone either way. `None`: every file's.
+    pub focus_files: Option<Arc<std::collections::HashSet<PathBuf>>>,
     /// Files left out of the scan, by canonical path: the baseline file
     /// `--changed` keeps.
     pub skip_files: Vec<PathBuf>,
@@ -130,6 +135,7 @@ impl Default for RunConfig {
             kinds: vec![],
             passes: vec![],
             only_files: None,
+            focus_files: None,
             skip_files: vec![],
             match_as: vec![],
         }
@@ -288,12 +294,22 @@ pub fn run_excluding(config: &RunConfig, exclude_dirs: &[PathBuf]) -> Result<Run
             true => filters.label(id),
             false => PathLabel::default(),
         };
+        // A source is in focus when its file is: an embedded block goes by
+        // its host file, and a file by its canonical path, as `--changed`
+        // lists them.
+        let focus = config.focus_files.as_deref().map(|files| {
+            move |id: &str| {
+                std::fs::canonicalize(cpd_core::paths::clean_source_id(id))
+                    .is_ok_and(|path| files.contains(&path))
+            }
+        });
         for pass in &config.passes {
             let context = PassContext {
                 existing: &clones,
                 min_tokens: config.min_tokens,
                 min_lines: config.min_lines,
                 label: &label,
+                focus: focus.as_ref().map(|f| f as &(dyn Fn(&str) -> bool + Sync)),
             };
             let found = pool
                 .install(|| pass.find(&context))

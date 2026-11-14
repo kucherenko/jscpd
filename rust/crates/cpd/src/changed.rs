@@ -98,6 +98,12 @@ impl Changed {
         &self.baseline_path
     }
 
+    /// Whether nothing under the scan paths changed: the working tree is
+    /// HEAD there, and a scan of every file builds the baseline of HEAD.
+    pub fn is_clean(&self) -> bool {
+        self.clean
+    }
+
     /// The changed files, for a run that scans them alone.
     pub fn files(&self) -> Arc<HashSet<PathBuf>> {
         Arc::clone(&self.files)

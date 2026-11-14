@@ -3,7 +3,7 @@
 
 use crate::search::{
     Embedder, SemanticParams, SemanticScope, SemanticUnit, Thresholds, UnitSource,
-    find_semantic_clones,
+    find_semantic_clones, find_semantic_clones_around,
 };
 use crate::units::{extract_units, supports_units};
 use cpd_core::models::CpdClone;
@@ -139,6 +139,14 @@ impl ClonePass for SemanticPass {
             min_lines: context.min_lines,
             scope: self.scope,
         };
-        find_semantic_clones(&sources, self.embedder.as_ref(), &params, context.existing)
+        let embedder = self.embedder.as_ref();
+        match context.focus {
+            // Only the pairs of the files the run reports.
+            Some(focus) => {
+                let focus: Vec<bool> = sources.iter().map(|source| focus(&source.id)).collect();
+                find_semantic_clones_around(&sources, embedder, &params, context.existing, &focus)
+            }
+            None => find_semantic_clones(&sources, embedder, &params, context.existing),
+        }
     }
 }

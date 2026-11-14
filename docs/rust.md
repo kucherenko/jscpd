@@ -390,6 +390,8 @@ When a fingerprint occurs more often than the baseline allows, the clones of the
 
 With `--changed`, the statistics count the files of the whole scan and the clones of the changed files. With `--changed-only`, they count the changed files only. `--threshold`, `--exit-code` and `--fail-on-new-clones` look at the clones reported. The paths must be inside a git repository, and git runs without taking its index lock, so a commit at the same time doesn't fail. Both flags are command line only, like `--update-baseline`: a `.jscpd.json` shared with CI can't narrow a CI run to the changed files of a clean checkout. See [`fixtures/changed-demo`](../fixtures/changed-demo/README.md) for a runnable example.
 
+With `--semantic`, `--changed` compares the functions of the changed files with every function of the scan, but not the unchanged functions with each other, and reports the same semantic clones a scan of every file reports for them. A clean tree and `--update-baseline` still compare every pair, since their clones make the baseline. See [`fixtures/changed-semantic-demo`](../fixtures/changed-semantic-demo/README.md).
+
 ### Blame Output
 
 With `--blame --reporters console-full`, clones are displayed with a side-by-side author comparison:

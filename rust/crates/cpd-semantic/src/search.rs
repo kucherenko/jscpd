@@ -327,6 +327,57 @@ pub fn pair_embedded(
     Ok(embedded.clones(&rows, params, |_, _| true))
 }
 
+/// [`find_semantic_clones`] for the sources `focus` marks, one flag per
+/// source: every clone the full search finds with a function in one of
+/// them, without scanning the rows of the rest (`--changed`, issue #1303).
+/// See [`pair_embedded_around`].
+pub fn find_semantic_clones_around(
+    sources: &[UnitSource],
+    embedder: &dyn Embedder,
+    params: &SemanticParams,
+    existing: &[CpdClone],
+    focus: &[bool],
+) -> Result<Vec<CpdClone>, String> {
+    let vectors = SourceVectors::embed(sources, embedder, params)?;
+    pair_embedded_around(sources, &vectors, params, existing, focus)
+}
+
+/// [`pair_embedded`] for the sources `focus` marks, one flag per source.
+///
+/// The rules decide a pair from the rows of its two functions alone, so
+/// rows are scanned for the marked functions and for the functions they
+/// may pair with, and every pair the full search finds with a marked
+/// function is found here, with the same similarity.
+///
+/// The result also holds the pairs of the functions elsewhere with the text
+/// of a marked one, and of the functions that hold those. A baseline counts
+/// the clones of one fingerprint, the hash of the texts of the two
+/// fragments, over the whole scan, and only such a pair can share a
+/// fingerprint with a pair of a marked function. Those pairs are found as
+/// the full search finds them, so a baseline marks the same clones new.
+pub fn pair_embedded_around(
+    sources: &[UnitSource],
+    vectors: &SourceVectors,
+    params: &SemanticParams,
+    existing: &[CpdClone],
+    focus: &[bool],
+) -> Result<Vec<CpdClone>, String> {
+    debug_assert_eq!(sources.len(), focus.len());
+    let sources: Vec<&UnitSource> = sources.iter().collect();
+    let items = eligible_items(&sources, params);
+    if items.len() < 2 {
+        return Ok(Vec::new());
+    }
+    let embedded = Embedded::new(&sources, items, &vectors.vectors, existing)?;
+    let asked = embedded.around(focus);
+    let picked: Vec<usize> = (0..asked.len()).filter(|&i| asked[i]).collect();
+    if picked.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rows = embedded.rows_around(&picked, params.thresholds.near_best);
+    Ok(embedded.clones(&rows, params, |i, j| asked[i] || asked[j]))
+}
+
 /// The functions of `sources` that the functions of `queries` would pair
 /// with if `queries` were more files of the project: a search for code
 /// that already does what a snippet does, before the snippet is written.
@@ -370,27 +421,8 @@ pub fn find_semantic_matches(
     let mut all_vectors = embedder.embed_once(&texts)?;
     all_vectors.extend(vectors.vectors.iter().cloned());
     let embedded = Embedded::new(&all, items, &all_vectors, existing)?;
-    // A row for each query function, then one for each project function
-    // that one of them may pair with; the rest of the project stays out of
-    // the rules.
     let queried: Vec<usize> = (0..asked).collect();
-    let mut rows = vec![vec![Background::EMPTY; embedded.grammars.count]; embedded.items.len()];
-    let mut candidates: Vec<usize> = Vec::new();
-    for (i, row) in queried.iter().zip(embedded.scan_rows(&queried)) {
-        for background in &row {
-            candidates.extend(
-                background
-                    .near_best(params.thresholds.near_best)
-                    .map(|(j, _)| j),
-            );
-        }
-        rows[*i] = row;
-    }
-    candidates.sort_unstable();
-    candidates.dedup();
-    for (j, row) in candidates.iter().zip(embedded.scan_rows(&candidates)) {
-        rows[*j] = row;
-    }
+    let rows = embedded.rows_around(&queried, params.thresholds.near_best);
     Ok(embedded.clones(&rows, params, |i, j| i < asked && j >= asked))
 }
 
@@ -442,6 +474,69 @@ impl<'s> Embedded<'s> {
             &self.related,
             |i, j| !self.labels[i].skips(self.labels[j]),
         )
+    }
+
+    /// A row for each of the items `asked`, then one for each item that one
+    /// of them may pair with: its near-best matches by `near_best`. The other
+    /// rows stay empty, and the rest of the items stay out of the rules.
+    fn rows_around(&self, asked: &[usize], near_best: f32) -> Vec<Vec<Background>> {
+        let mut rows = vec![vec![Background::EMPTY; self.grammars.count]; self.items.len()];
+        let mut scanned = vec![false; self.items.len()];
+        let mut candidates: Vec<usize> = Vec::new();
+        for (i, row) in asked.iter().zip(self.scan_rows(asked)) {
+            for background in &row {
+                candidates.extend(background.near_best(near_best).map(|(j, _)| j));
+            }
+            rows[*i] = row;
+            scanned[*i] = true;
+        }
+        candidates.sort_unstable();
+        candidates.dedup();
+        candidates.retain(|&j| !scanned[j]);
+        for (j, row) in candidates.iter().zip(self.scan_rows(&candidates)) {
+            rows[*j] = row;
+        }
+        rows
+    }
+
+    /// The items whose pairs [`pair_embedded_around`] reports: those of the
+    /// sources `focus` marks, those elsewhere with the text of one of them,
+    /// and those holding one of the latter in its source.
+    fn around(&self, focus: &[bool]) -> Vec<bool> {
+        let unit = |i: usize| {
+            let item = &self.items[i];
+            &self.sources[item.source].units[item.unit]
+        };
+        // Text without carriage returns: fingerprints leave them out.
+        let key = |i: usize| unit(i).text.replace('\r', "");
+        let mut asked: Vec<bool> = self.items.iter().map(|item| focus[item.source]).collect();
+        let texts: std::collections::HashSet<String> =
+            (0..asked.len()).filter(|&i| asked[i]).map(key).collect();
+        let twins: Vec<usize> = (0..asked.len())
+            .filter(|&i| !asked[i] && texts.contains(&key(i)))
+            .collect();
+        let mut twins_in: FxHashMap<usize, Vec<usize>> = FxHashMap::default();
+        for &twin in &twins {
+            asked[twin] = true;
+            twins_in
+                .entry(self.items[twin].source)
+                .or_default()
+                .push(twin);
+        }
+        // A pair inside a pair of the same two sources is dropped; the outer
+        // pair needs its rows.
+        for (i, item) in self.items.iter().enumerate() {
+            let Some(inside) = twins_in.get(&item.source) else {
+                continue;
+            };
+            let outer = unit(i);
+            asked[i] = asked[i]
+                || inside.iter().any(|&twin| {
+                    let inner = unit(twin);
+                    outer.start.line <= inner.start.line && inner.end.line <= outer.end.line
+                });
+        }
+        asked
     }
 
     /// The semantic clones the rules accept among the scanned `rows`, of the
@@ -2384,5 +2479,152 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    /// Embeds `c<k> ...` near axis `k`, tilted by a hash of the whole text,
+    /// so one text always gets one vector.
+    struct Clusters;
+
+    impl Embedder for Clusters {
+        fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+            Ok(texts
+                .iter()
+                .map(|text| {
+                    let cluster: usize = text[1..]
+                        .split_whitespace()
+                        .next()
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+                    let hash = cpd_core::hash::token_hash(0, text);
+                    let mut v = vec![0.0; 128];
+                    v[cluster] = 1.0;
+                    v[16 + (hash % 100) as usize] +=
+                        0.15 + (hash >> 32) as f32 / u32::MAX as f32 * 0.5;
+                    v
+                })
+                .collect())
+        }
+    }
+
+    /// A function on lines `start..=end` whose text is `text`.
+    fn spanning(name: &str, start: u32, end: u32, text: &str) -> SemanticUnit {
+        SemanticUnit {
+            start: loc(start, start * 100),
+            end: loc(end, end * 100 + 90),
+            ..unit("oxc", name, start, text)
+        }
+    }
+
+    /// The clones of `found` that `keep` picks, by place and similarity.
+    fn placed(found: &[CpdClone], keep: impl Fn(&CpdClone) -> bool) -> Vec<String> {
+        let mut placed: Vec<String> = found
+            .iter()
+            .filter(|c| keep(c))
+            .map(|c| {
+                let (a, b) = (&c.fragment_a, &c.fragment_b);
+                format!(
+                    "{}:{} {}:{} {:?}",
+                    a.source_id, a.start.line, b.source_id, b.start.line, c.structure
+                )
+            })
+            .collect();
+        placed.sort();
+        placed
+    }
+
+    /// `--changed` pairs the functions of the changed files alone (issue
+    /// #1303): every clone of the full search with an end in a focused file
+    /// is found, and so is every clone with an end that has the text of a
+    /// focused function, as a baseline counts those under one fingerprint.
+    #[test]
+    fn a_focused_search_finds_what_the_full_search_finds_there() {
+        let mut sources: Vec<UnitSource> = (0..40)
+            .map(|k| {
+                let units = (0..(1 + k % 3))
+                    .map(|u| {
+                        spanning(
+                            &format!("f{k}_{u}"),
+                            1 + u * 20,
+                            10 + u * 20,
+                            &format!("c{} f{k} u{u}", (k * 7 + u) % 9),
+                        )
+                    })
+                    .collect();
+                source(&format!("src/m{k}.ts"), "typescript", units)
+            })
+            .collect();
+        // Two more copies of m0's first function, each inside an outer
+        // function, the outer two alike: the pair of the inner copies is
+        // nested in theirs, and a baseline counts it with m0's pairs.
+        let copied = sources[0].units[0].text.clone();
+        for (k, name) in [(40, "outer"), (41, "outer2")] {
+            sources.push(source(
+                &format!("src/m{k}.ts"),
+                "typescript",
+                vec![
+                    spanning(name, 1, 40, "c10 outer"),
+                    spanning("inner", 10, 19, &copied),
+                ],
+            ));
+        }
+        let full = find_semantic_clones(&sources, &Clusters, &PARAMS, &[]).unwrap();
+        assert!(full.len() >= 10, "{} clones", full.len());
+        fn lines(c: &CpdClone) -> (&str, u32, &str, u32) {
+            let (a, b) = (&c.fragment_a, &c.fragment_b);
+            (
+                a.source_id.as_str(),
+                a.start.line,
+                b.source_id.as_str(),
+                b.start.line,
+            )
+        }
+        assert!(
+            full.iter()
+                .any(|c| lines(c) == ("src/m40.ts", 1, "src/m41.ts", 1))
+        );
+        assert!(
+            !full
+                .iter()
+                .any(|c| lines(c) == ("src/m40.ts", 10, "src/m41.ts", 10))
+        );
+        assert!(
+            full.iter()
+                .any(|c| lines(c) == ("src/m0.ts", 1, "src/m40.ts", 10))
+        );
+        let text_at = |id: &str, line: u32| -> &str {
+            let source = sources.iter().find(|s| s.id == id).unwrap();
+            &source
+                .units
+                .iter()
+                .find(|u| u.start.line == line)
+                .unwrap()
+                .text
+        };
+        for focused in [vec![0], vec![1, 2], vec![40], vec![5, 17, 33], vec![]] {
+            let focus: Vec<bool> = (0..sources.len()).map(|i| focused.contains(&i)).collect();
+            let texts: Vec<&str> = focused
+                .iter()
+                .flat_map(|&i| sources[i].units.iter().map(|u| u.text.as_str()))
+                .collect();
+            let in_focus = |c: &CpdClone| {
+                [&c.fragment_a, &c.fragment_b].into_iter().any(|f| {
+                    focused.iter().any(|&i| sources[i].id == f.source_id)
+                        || texts.contains(&text_at(&f.source_id, f.start.line))
+                })
+            };
+            let around =
+                find_semantic_clones_around(&sources, &Clusters, &PARAMS, &[], &focus).unwrap();
+            assert_eq!(
+                placed(&around, in_focus),
+                placed(&full, in_focus),
+                "focus {focused:?}"
+            );
+            // Whatever else it finds, the full search finds too.
+            let all = placed(&full, |_| true);
+            for clone in placed(&around, |_| true) {
+                assert!(all.contains(&clone), "{clone} with focus {focused:?}");
+            }
+        }
     }
 }

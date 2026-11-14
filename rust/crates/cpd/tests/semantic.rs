@@ -872,3 +872,91 @@ fn compare_drops_csharp_branches_recovered_as_functions() {
     }
     cleanup(&dir);
 }
+
+/// Run git in `dir`; panics unless it succeeds.
+fn git(dir: &Path, args: &[&str]) {
+    let output = common::git_in(dir, args);
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// The pairs of `pairs` with an end in a file named `name`, sorted.
+fn touching(pairs: &[(String, String, f64)], name: &str) -> Vec<(String, String, f64)> {
+    let mut kept: Vec<_> = pairs
+        .iter()
+        .filter(|(a, b, _)| a.ends_with(name) || b.ends_with(name))
+        .cloned()
+        .collect();
+    kept.sort_by(|x, y| x.partial_cmp(y).unwrap());
+    kept
+}
+
+/// `--changed --semantic` pairs the functions of the changed files with the
+/// rest, and finds what a scan of every file finds for them (issue #1303).
+/// A clean tree still scans every pair: its clones are the baseline of HEAD.
+#[test]
+fn changed_pairs_the_functions_of_the_changed_files() {
+    let server = Server::start();
+    let dir = project("changed");
+    add_second_implementation(&dir);
+    git(&dir, &["init", "-q"]);
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "base"]);
+    let args = [
+        "--semantic",
+        "--semantic-url",
+        &server.url,
+        "--semantic-model",
+        "stand-in",
+    ];
+    let (full, _) = json_report(&dir, &args, &[]);
+    let all = semantic_pairs(&full);
+    let expected = touching(&all, "cart.rs");
+    assert!(
+        !expected.is_empty() && expected.len() < all.len(),
+        "{all:?}"
+    );
+    let changed = [&args[..], &["--changed"]].concat();
+
+    // Nothing changed: no clone to report, and the baseline of HEAD holds
+    // every clone of the scan, the semantic ones too.
+    let (clean, stderr) = json_report(&dir, &changed, &[]);
+    assert!(
+        clean["duplicates"].as_array().unwrap().is_empty(),
+        "{stderr}"
+    );
+    let saved: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join(".jscpd-baseline.json")).unwrap())
+            .unwrap();
+    let fingerprints: u64 = saved["fingerprints"]
+        .as_object()
+        .unwrap()
+        .values()
+        .map(|count| count.as_u64().unwrap())
+        .sum();
+    assert_eq!(
+        fingerprints as usize,
+        full["duplicates"].as_array().unwrap().len()
+    );
+
+    // One file changed: its pairs, as the full scan finds them, none new.
+    let cart = dir.join("backend/src/cart.rs");
+    let text = std::fs::read_to_string(&cart).unwrap();
+    std::fs::write(&cart, format!("{text}\n// Cart totals.\n")).unwrap();
+    let (report, stderr) = json_report(&dir, &changed, &[]);
+    let pairs = semantic_pairs(&report);
+    assert_eq!(touching(&pairs, "cart.rs"), expected, "{stderr}");
+    assert_eq!(pairs.len(), expected.len(), "{pairs:?}");
+    assert!(
+        report["duplicates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["isNew"] == false),
+        "{report:#}"
+    );
+    cleanup(&dir);
+}
