@@ -324,6 +324,9 @@ importers:
 
   packages/html-reporter:
     dependencies:
+      '@jscpd/finder':
+        specifier: workspace:*
+        version: link:../finder
       colors:
         specifier: 1.4.0
         version: 1.4.0
@@ -337,9 +340,6 @@ importers:
       '@jscpd/core':
         specifier: workspace:*
         version: link:../core
-      '@jscpd/finder':
-        specifier: workspace:*
-        version: link:../finder
       '@jscpd/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
