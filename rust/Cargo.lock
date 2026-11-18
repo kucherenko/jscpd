@@ -600,6 +600,7 @@ dependencies = [
  "cpd-tokenizer",
  "globset",
  "ignore",
+ "jiff",
  "memchr",
  "memmap2",
  "rayon",
