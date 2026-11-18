@@ -57,7 +57,7 @@ pub fn compute<'a>(
         }
     }
 
-    let detection_date = now_iso8601();
+    let detection_date = cpd_core::time::now_iso8601();
 
     Statistics {
         total: StatRow {
@@ -75,17 +75,6 @@ pub fn compute<'a>(
         formats,
         detection_date,
     }
-}
-
-/// The current UTC time as `2026-11-18T09:30:00.123Z`, the shape of
-/// JavaScript's `Date.prototype.toISOString()`.
-pub fn now_iso8601() -> String {
-    iso8601_utc(jiff::Timestamp::now())
-}
-
-/// Format a timestamp in UTC with millisecond precision.
-fn iso8601_utc(timestamp: jiff::Timestamp) -> String {
-    format!("{timestamp:.3}")
 }
 
 #[cfg(test)]
@@ -199,24 +188,5 @@ mod tests {
         let stats = compute(&sources, &[]);
         assert!(stats.formats.contains_key("javascript"));
         assert_eq!(stats.formats["javascript"].sources, 1);
-    }
-}
-
-#[cfg(test)]
-mod iso8601_tests {
-    use super::iso8601_utc;
-
-    #[test]
-    fn formats_utc_with_milliseconds() {
-        let cases = [
-            (0, 0, "1970-01-01T00:00:00.000Z"),
-            (86_399, 999_999_999, "1970-01-01T23:59:59.999Z"),
-            (1_709_164_800, 7_000_000, "2024-02-29T00:00:00.007Z"),
-            (1_795_080_645, 123_000_000, "2026-11-19T09:30:45.123Z"),
-        ];
-        for (secs, nanos, expected) in cases {
-            let timestamp = jiff::Timestamp::new(secs, nanos).unwrap();
-            assert_eq!(iso8601_utc(timestamp), expected, "secs = {secs}");
-        }
     }
 }

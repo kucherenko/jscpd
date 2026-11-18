@@ -584,6 +584,7 @@ checksum = "417bef24afe1460300965a25ff4a24b8b45ad011948302ec221e8a0a81eb2c79"
 name = "cpd-core"
 version = "0.1.23"
 dependencies = [
+ "jiff",
  "rayon",
  "rustc-hash",
  "serde",
@@ -600,7 +601,6 @@ dependencies = [
  "cpd-tokenizer",
  "globset",
  "ignore",
- "jiff",
  "memchr",
  "memmap2",
  "rayon",

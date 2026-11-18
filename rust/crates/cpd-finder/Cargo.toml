@@ -20,6 +20,5 @@ ignore = "0.4"
 globset = "0.4"
 rayon = "1"
 regex = "1"
-jiff = { version = "0.2", default-features = false, features = ["std"] }
 memmap2 = "0.9"
 memchr = "2.8"

@@ -184,7 +184,7 @@ fn stats(findings: &[Finding], total_lines: u32) -> Stats {
         } else {
             (f64::from(dead_lines) / f64::from(total_lines)) * 100.0
         },
-        detection_date: crate::analyze::now_iso8601(),
+        detection_date: cpd_core::time::now_iso8601(),
     }
 }
 
