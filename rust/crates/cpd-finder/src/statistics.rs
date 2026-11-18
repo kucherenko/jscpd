@@ -57,17 +57,7 @@ pub fn compute<'a>(
         }
     }
 
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let detection_date = {
-        let duration = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default();
-        let secs = duration.as_secs();
-        let millis = duration.subsec_millis();
-        chrono::DateTime::from_timestamp(secs as i64, millis * 1_000_000)
-            .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
-            .unwrap_or_else(|| format!("{secs}"))
-    };
+    let detection_date = now_iso8601();
 
     Statistics {
         total: StatRow {
@@ -85,6 +75,44 @@ pub fn compute<'a>(
         formats,
         detection_date,
     }
+}
+
+/// The current UTC time as `2026-11-18T09:30:00.123Z`, the shape of
+/// JavaScript's `Date.prototype.toISOString()`.
+pub fn now_iso8601() -> String {
+    let duration = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    iso8601_utc(duration.as_secs(), duration.subsec_millis())
+}
+
+/// Format seconds since the Unix epoch, plus milliseconds, as an ISO 8601 UTC
+/// timestamp. The date comes from the days-to-civil conversion of the
+/// proleptic Gregorian calendar, so no date-time crate is needed for it.
+pub fn iso8601_utc(secs: u64, millis: u32) -> String {
+    let days = secs / 86_400;
+    let rem = secs % 86_400;
+    // Shift the epoch to 0000-03-01 so a leap day is the last day of a year.
+    let z = days + 719_468;
+    let era = z / 146_097;
+    let day_of_era = z % 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let shifted_month = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * shifted_month + 2) / 5 + 1;
+    let month = if shifted_month < 10 {
+        shifted_month + 3
+    } else {
+        shifted_month - 9
+    };
+    let year = year_of_era + era * 400 + u64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{millis:03}Z",
+        rem / 3_600,
+        rem % 3_600 / 60,
+        rem % 60
+    )
 }
 
 #[cfg(test)]
@@ -198,5 +226,28 @@ mod tests {
         let stats = compute(&sources, &[]);
         assert!(stats.formats.contains_key("javascript"));
         assert_eq!(stats.formats["javascript"].sources, 1);
+    }
+}
+
+#[cfg(test)]
+mod iso8601_tests {
+    use super::iso8601_utc;
+
+    #[test]
+    fn formats_known_instants() {
+        let cases = [
+            (0, 0, "1970-01-01T00:00:00.000Z"),
+            (86_399, 999, "1970-01-01T23:59:59.999Z"),
+            (951_782_400, 0, "2000-02-29T00:00:00.000Z"),
+            (951_868_800, 0, "2000-03-01T00:00:00.000Z"),
+            (1_709_164_800, 7, "2024-02-29T00:00:00.007Z"),
+            (1_735_689_599, 0, "2024-12-31T23:59:59.000Z"),
+            (1_735_689_600, 0, "2025-01-01T00:00:00.000Z"),
+            (1_795_080_645, 123, "2026-11-19T09:30:45.123Z"),
+            (4_107_542_400, 0, "2100-03-01T00:00:00.000Z"),
+        ];
+        for (secs, millis, expected) in cases {
+            assert_eq!(iso8601_utc(secs, millis), expected, "secs = {secs}");
+        }
     }
 }
