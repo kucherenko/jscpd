@@ -929,12 +929,25 @@ fn flush_clone(
         return;
     }
 
+    let (ex_start, cur_start, match_len) = match existing.source_id == current_file_idx {
+        true => match separate_repeats(
+            existing.token_start,
+            oc.current_start,
+            oc.match_len,
+            min_tokens,
+        ) {
+            Some(separated) => separated,
+            None => return,
+        },
+        false => (existing.token_start, oc.current_start, oc.match_len),
+    };
+
     let runs = consistent_runs(
         existing_file,
-        existing.token_start,
+        ex_start,
         current_file,
-        oc.current_start,
-        oc.match_len,
+        cur_start,
+        match_len,
         min_tokens,
         min_lines,
     );
@@ -942,9 +955,9 @@ fn flush_clone(
         if len >= min_tokens {
             push_clone(
                 existing_file,
-                existing.token_start + offset,
+                ex_start + offset,
                 current_file,
-                oc.current_start + offset,
+                cur_start + offset,
                 len,
                 min_lines,
                 offset > 0,
@@ -952,6 +965,36 @@ fn flush_clone(
             );
         }
     }
+}
+
+/// The part of a match within one file that does not overlap itself, as
+/// `(a_start, b_start, len)`: the `len` tokens from `a_start` match the ones
+/// from `b_start`, which comes later (issue #590). Fragments that overlap
+/// mean the file repeats a run of tokens back to back, one `b_start -
+/// a_start` long: `a b a b a b` matches itself two tokens along. Such a run
+/// is reported as two parts of it that lie a whole number of repeats apart
+/// and do not overlap, the longest such pair, or not at all when that pair
+/// is shorter than `min_tokens`, as PMD CPD reports a self-repeating
+/// sequence.
+fn separate_repeats(
+    a_start: usize,
+    b_start: usize,
+    len: usize,
+    min_tokens: usize,
+) -> Option<(usize, usize, usize)> {
+    let period = b_start - a_start;
+    if len <= period {
+        return Some((a_start, b_start, len));
+    }
+    let run = len + period;
+    let part = |repeats: usize| (run - repeats * period).min(repeats * period);
+    let repeats = run / (2 * period);
+    let repeats = match part(repeats + 1) > part(repeats) {
+        true => repeats + 1,
+        false => repeats,
+    };
+    let len = part(repeats);
+    (len >= min_tokens).then_some((a_start, a_start + repeats * period, len))
 }
 
 /// Report `len` matching tokens from `ex_start` in `existing_file` and
@@ -1532,11 +1575,27 @@ fn flush_secondary_clone(
         true => matched + 1,
         false => matched,
     };
+    let (clone, start_b, len) = match oc.source_a == oc.source_b && len > start_b - start_a {
+        false => (oc.clone, start_b, len),
+        true => {
+            let Some((_, from_b, len)) = separate_repeats(start_a, start_b, len, min_tokens) else {
+                return;
+            };
+            let (Some(frag_a), Some(frag_b)) = (
+                make_fragment(&a.id, &a.spans, start_a, start_a + len - 1),
+                make_fragment(&b.id, &b.spans, from_b, from_b + len - 1),
+            ) else {
+                return;
+            };
+            let clone = CpdClone::exact(oc.clone.format.clone(), frag_a, frag_b, len as u32);
+            (clone, from_b, len)
+        }
+    };
     let runs = match a.renames.is_empty() || b.renames.is_empty() {
         true => Vec::new(),
         // A part spans no more lines than the clone, and covers no line it
         // does not, so a clone that falls short is not cut.
-        false if fits_secondary(&oc.clone, oc.source_a, oc.source_b, min_lines, coverage) => {
+        false if fits_secondary(&clone, oc.source_a, oc.source_b, min_lines, coverage) => {
             consistent_runs(a, start_a, b, start_b, len, min_tokens, min_lines)
         }
         false => return,
@@ -1544,7 +1603,7 @@ fn flush_secondary_clone(
     if runs.len() < 2 {
         // A clone that keeps to one mapping goes out as the pass grew it.
         finish_secondary_clone(
-            oc.clone,
+            clone,
             oc.source_a,
             oc.source_b,
             prepared,
@@ -1568,7 +1627,7 @@ fn flush_secondary_clone(
         };
         let clone = CpdClone {
             after_cut: offset > 0,
-            ..CpdClone::exact(oc.clone.format.clone(), frag_a, frag_b, len as u32)
+            ..CpdClone::exact(clone.format.clone(), frag_a, frag_b, len as u32)
         };
         finish_secondary_clone(
             clone,
@@ -2117,6 +2176,48 @@ mod tests {
             1,
             "symmetric pairs must collapse to 1"
         );
+    }
+
+    /// A file that repeats `unit` distinct tokens back to back `times`
+    /// times, one token per line.
+    fn repeating_file(unit: usize, times: usize) -> SourceFile {
+        let tokens = (0..unit * times)
+            .map(|i| {
+                let value = format!("t{}", i % unit);
+                make_token(TokenKind::Other, &value, i as u32 + 1, 0, i as u32 * 4)
+            })
+            .collect();
+        make_file("repeat.js", "javascript", tokens)
+    }
+
+    fn token_ranges(clones: &[CpdClone]) -> Vec<([u32; 2], [u32; 2])> {
+        clones
+            .iter()
+            .map(|c| (c.fragment_a.range, c.fragment_b.range))
+            .collect()
+    }
+
+    #[test]
+    fn a_block_repeated_three_times_is_one_copy_against_the_next() {
+        let clones = detect(&[repeating_file(6, 3)], 5);
+        assert_eq!(token_ranges(&clones), vec![([0, 5], [6, 11])]);
+    }
+
+    #[test]
+    fn a_block_repeated_four_times_is_two_copies_against_the_other_two() {
+        let clones = detect(&[repeating_file(6, 4)], 5);
+        assert_eq!(token_ranges(&clones), vec![([0, 11], [12, 23])]);
+    }
+
+    #[test]
+    fn a_run_of_short_repeats_is_reported_as_halves_that_do_not_overlap() {
+        let clones = detect(&[repeating_file(2, 6)], 5);
+        assert_eq!(token_ranges(&clones), vec![([0, 5], [6, 11])]);
+    }
+
+    #[test]
+    fn a_run_whose_halves_are_below_min_tokens_is_not_a_clone() {
+        assert!(detect(&[repeating_file(2, 4)], 5).is_empty());
     }
 
     #[test]
