@@ -11,16 +11,6 @@ fn cpd_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_cpd"))
 }
 
-/// Run git in `dir`; panics unless it succeeds.
-fn git(dir: &Path, args: &[&str]) {
-    let output = common::git_in(dir, args);
-    assert!(
-        output.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
 /// One of two functions of about 60 tokens that share no code: `known`,
 /// copied in `a.js` and `b.js`, and `helper`.
 fn function(name: &str) -> String {
@@ -72,9 +62,9 @@ fn repo() -> PathBuf {
     std::fs::write(root.join("src/b.js"), function("known")).unwrap();
     std::fs::write(root.join("src/lib.js"), function("helper")).unwrap();
     std::fs::write(root.join(".gitignore"), "out/\n").unwrap();
-    git(&root, &["init", "-q"]);
-    git(&root, &["add", "-A"]);
-    git(&root, &["commit", "-q", "-m", "base"]);
+    common::git(&root, &["init", "-q"]);
+    common::git(&root, &["add", "-A"]);
+    common::git(&root, &["commit", "-q", "-m", "base"]);
     root
 }
 
@@ -314,8 +304,8 @@ fn a_commit_rebuilds_the_baseline() {
     std::fs::write(root.join("src/copy.js"), function("helper")).unwrap();
     assert!(run_changed(&root, &[]).status.success());
     let before = head(&root);
-    git(&root, &["add", "src"]);
-    git(&root, &["commit", "-q", "-m", "copy"]);
+    common::git(&root, &["add", "src"]);
+    common::git(&root, &["commit", "-q", "-m", "copy"]);
 
     // b.js changes, the copy is committed: HEAD has both clones now.
     let edited = format!("{}\nexport const version = 2;\n", function("known"));
