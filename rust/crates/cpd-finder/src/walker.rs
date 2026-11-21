@@ -115,15 +115,20 @@ pub fn walk(config: &WalkConfig) -> Vec<DiscoveredFile> {
 /// nested project a scan of its own. The folders are absolute paths,
 /// compared with the walked paths of an absolute root.
 pub fn walk_excluding(config: &WalkConfig, exclude_dirs: &[PathBuf]) -> Vec<DiscoveredFile> {
+    let rules = Rules::new(config);
     let mut results = Vec::new();
-    for (i, root) in config.paths.iter().enumerate() {
-        walk_one(
-            root,
-            config.match_as.get(i),
-            config,
-            exclude_dirs,
-            &mut results,
-        );
+    for (i, given) in config.paths.iter().enumerate() {
+        let root = Root::new(given, config.match_as.get(i));
+        // A file root is taken as the walker would take it: the walker hands
+        // a root to the callback without checking the ignore files or
+        // `filter_entry`, but it starts a thread pool for every root, which
+        // made a list of 3,000 files a hundred times slower than their
+        // folder (issue #1306).
+        if given.is_file() {
+            results.extend(rules.take(given, &root));
+        } else {
+            walk_dir(&root, &rules, exclude_dirs, &mut results);
+        }
     }
     if config.follow_symlinks || config.paths.len() > 1 {
         dedup_by_real_path(&mut results);
@@ -158,14 +163,158 @@ fn anchor_at_root(path: &Path, root: &Path, root_canon: &Path) -> PathBuf {
     }
 }
 
-fn walk_one(
-    root: &Path,
-    match_as: Option<&PathBuf>,
-    config: &WalkConfig,
+/// What a walk with one config takes, its globs compiled once for all the
+/// roots and files it looks at: the format filters, `--pattern`, `--ignore`
+/// and the size limit.
+struct Rules<'a> {
+    config: &'a WalkConfig,
+    ignore_set: GlobSet,
+    /// The positive `--pattern` filter, if set. In v4, `pattern` (e.g.
+    /// `**/*.ts`) was appended to each scan path to form the glob passed to
+    /// fast-glob; here files are filtered as they are walked.
+    pattern_set: Option<GlobSet>,
+}
+
+/// One scan root as the walk sees it.
+struct Root {
+    /// The root as given: the walked paths start with it.
+    given: PathBuf,
+    /// The root resolved once, for the ids of its files.
+    canon: PathBuf,
+    /// The tree the patterns see when the root stands for another one
+    /// (`WalkConfig::match_as`), as given and canonical.
+    stand_in: Option<(PathBuf, PathBuf)>,
+}
+
+impl Root {
+    fn new(given: &Path, match_as: Option<&PathBuf>) -> Self {
+        let canonical =
+            |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        Self {
+            given: given.to_path_buf(),
+            canon: canonical(given),
+            stand_in: match_as.map(|tree| (tree.clone(), canonical(tree))),
+        }
+    }
+}
+
+impl<'a> Rules<'a> {
+    fn new(config: &'a WalkConfig) -> Self {
+        Self {
+            config,
+            ignore_set: build_ignore_glob_set(&config.ignore_patterns),
+            pattern_set: config.pattern.as_deref().map(build_positive_glob_set),
+        }
+    }
+
+    /// Whether `--pattern` lets `path` through. Both the path relative to
+    /// `root` and the whole path are tried, so relative patterns (e.g.
+    /// `src/**/*.ts`) and absolute ones (e.g. `/project/src/**/*.ts`) work.
+    fn pattern_allows(&self, path: &Path, root: &Path) -> bool {
+        match &self.pattern_set {
+            Some(set) if !set.is_empty() => {
+                let relative = path.strip_prefix(root).unwrap_or(path);
+                set.is_match(relative) || set.is_match(path)
+            }
+            _ => true,
+        }
+    }
+
+    fn ignored(&self, path: &Path) -> bool {
+        !self.ignore_set.is_empty() && self.ignore_set.is_match(path)
+    }
+
+    /// Over the size limit; a file not on disk is not.
+    fn too_big(&self, path: &Path) -> bool {
+        self.config
+            .max_size
+            .is_some_and(|max| std::fs::metadata(path).is_ok_and(|meta| meta.len() > max))
+    }
+
+    fn format(&self, path: &Path) -> Option<String> {
+        detect_format(
+            path,
+            &self.config.extensions,
+            &self.config.formats_exts,
+            &self.config.formats_names,
+        )
+    }
+
+    /// The file a walk of `root` found at `path`, if the walk takes it. The
+    /// ignore files are the walker's to apply, before it gets here.
+    fn take(&self, path: &Path, root: &Root) -> Option<DiscoveredFile> {
+        if !path.is_file() {
+            return None;
+        }
+        let follow_symlinks = self.config.follow_symlinks;
+        if !follow_symlinks
+            && std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
+        {
+            return None;
+        }
+        // Metadata only, before the format detection may read the file.
+        if self.too_big(path) {
+            return None;
+        }
+        // The path the patterns match, and the root it is relative to: the
+        // file's place in the tree the root stands for, if any.
+        let (matched, matched_root) = match &root.stand_in {
+            Some((tree, tree_canon)) => (
+                match path.strip_prefix(&root.given) {
+                    Ok(rel) if !rel.as_os_str().is_empty() => tree.join(rel),
+                    _ => tree.clone(),
+                },
+                tree_canon,
+            ),
+            None => (path.to_path_buf(), &root.canon),
+        };
+        if !self.pattern_allows(&matched, matched_root) {
+            return None;
+        }
+        let format = self.format(path)?;
+        if self.ignored(&matched) {
+            return None;
+        }
+        // Only a walk that follows links can reach a file by a name that is
+        // not its own; keep the default walk free of the extra syscall.
+        let real_path = match follow_symlinks {
+            true => std::fs::canonicalize(path).ok(),
+            false => None,
+        };
+        let path = anchor_at_root(path, &root.given, &root.canon);
+        let real_path = real_path.unwrap_or_else(|| path.clone());
+        Some(DiscoveredFile {
+            path,
+            format,
+            real_path,
+        })
+    }
+
+    /// [`accepts`] with these rules.
+    fn accepts(&self, path: &Path, root: &Path) -> Option<String> {
+        if in_git_dir(path, root) || !self.pattern_allows(path, root) {
+            return None;
+        }
+        let format = self.format(path)?;
+        if self.ignored(path)
+            || self.too_big(path)
+            || ignored_by_files(path, root, false, self.config.no_gitignore)
+        {
+            return None;
+        }
+        Some(format)
+    }
+}
+
+/// Walk the folder `root` in parallel, appending the files `rules` take.
+fn walk_dir(
+    root: &Root,
+    rules: &Rules,
     exclude_dirs: &[PathBuf],
     results: &mut Vec<DiscoveredFile>,
 ) {
-    let mut builder = WalkBuilder::new(root);
+    let config = rules.config;
+    let mut builder = WalkBuilder::new(&root.given);
     builder.follow_links(config.follow_symlinks);
     builder.git_ignore(!config.no_gitignore);
     builder.hidden(false);
@@ -175,133 +324,20 @@ fn walk_one(
         !git_dir && !excluded.iter().any(|dir| entry.path() == dir)
     });
 
-    // Pre-compile ignore glob set once — shared across all walker threads.
-    let ignore_set = build_ignore_glob_set(&config.ignore_patterns);
-
-    // Build a positive pattern glob set: if set, only files matching the
-    // pattern are included. In v4, `pattern` (e.g. `**/*.ts`) was appended
-    // to each scan path to form the glob passed to fast-glob. Here we
-    // filter post-walk instead.
-    //
-    // We match against the path relative to the walk root so that relative
-    // patterns like `src/**/*.ts` work regardless of whether the root is
-    // absolute or relative. We also add a `**/` prefix variant for
-    // relative patterns so that `*.ts` matches at any depth (consistent
-    // with how ignore patterns are handled).
-    let pattern_set = config.pattern.as_deref().map(build_positive_glob_set);
-
-    // Canonicalize root once for relative path computation.
-    let root_canon = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-    // The tree the patterns see: the one the root stands for, if any.
-    let stand_in = match_as.map(|tree| {
-        let canonical = std::fs::canonicalize(tree).unwrap_or_else(|_| tree.clone());
-        (tree.clone(), canonical)
-    });
-
     // Use mpsc::channel for collection — cheaper than Arc<Mutex<Vec>> under parallelism.
     let (tx, rx) = mpsc::channel::<DiscoveredFile>();
-
-    let follow_symlinks = config.follow_symlinks;
-    let root_given = root.to_path_buf();
-    let max_size = config.max_size;
-    let extensions = config.extensions.clone();
-    let formats_exts = config.formats_exts.clone();
-    let formats_names = config.formats_names.clone();
-    let pattern_set = pattern_set.clone();
-
-    builder.build_parallel().run(move || {
+    builder.build_parallel().run(|| {
         let tx = tx.clone();
-        let extensions = extensions.clone();
-        let ignore_set = ignore_set.clone();
-        let formats_exts = formats_exts.clone();
-        let formats_names = formats_names.clone();
-        let pattern_set = pattern_set.clone();
-        let root_canon = root_canon.clone();
-        let root_given = root_given.clone();
-        let stand_in = stand_in.clone();
-
-        Box::new(move |entry_result| {
-            use ignore::WalkState;
-
-            let entry = match entry_result {
-                Ok(e) => e,
-                Err(_) => return WalkState::Continue,
-            };
-            let path = entry.path().to_path_buf();
-            if !path.is_file() {
-                return WalkState::Continue;
-            }
-
-            // Skip symlinks if not following.
-            if !follow_symlinks
-                && let Ok(meta) = std::fs::symlink_metadata(&path)
-                && meta.file_type().is_symlink()
+        Box::new(move |entry| {
+            if let Ok(entry) = entry
+                && let Some(file) = rules.take(entry.path(), root)
             {
-                return WalkState::Continue;
+                let _ = tx.send(file);
             }
-
-            // Size limit check (metadata only — no file read yet).
-            if let Some(max) = max_size
-                && let Ok(meta) = std::fs::metadata(&path)
-                && meta.len() > max
-            {
-                return WalkState::Continue;
-            }
-
-            // The path the patterns match, and the root it is relative to:
-            // the file's place in the tree the root stands for, if any.
-            let (matched, matched_root) = match &stand_in {
-                Some((tree, tree_canon)) => (
-                    match path.strip_prefix(&root_given) {
-                        Ok(rel) if !rel.as_os_str().is_empty() => tree.join(rel),
-                        _ => tree.clone(),
-                    },
-                    tree_canon,
-                ),
-                None => (path.clone(), &root_canon),
-            };
-
-            // Pattern filter: if set, only include files matching the positive glob.
-            // Try matching against both the relative path (stripped of root prefix) and
-            // the full path so that both relative patterns (e.g. `src/**/*.ts`) and
-            // absolute patterns (e.g. `/project/src/**/*.ts`) work correctly.
-            if let Some(ref ps) = pattern_set
-                && !ps.is_empty()
-            {
-                let rel = matched.strip_prefix(matched_root).unwrap_or(&matched);
-                if !ps.is_match(rel) && !ps.is_match(&matched) {
-                    return WalkState::Continue;
-                }
-            }
-
-            // Format detection.
-            let format = match detect_format(&path, &extensions, &formats_exts, &formats_names) {
-                Some(f) => f,
-                None => return WalkState::Continue,
-            };
-
-            // Ignore patterns — pre-compiled GlobSet (correctness + speed vs substring).
-            if !ignore_set.is_empty() && ignore_set.is_match(&matched) {
-                return WalkState::Continue;
-            }
-
-            // Only a walk that follows links can reach a file by a name that
-            // is not its own; keep the default walk free of the extra syscall.
-            let real_path = if follow_symlinks {
-                std::fs::canonicalize(&path).ok()
-            } else {
-                None
-            };
-            let path = anchor_at_root(&path, &root_given, &root_canon);
-            let real_path = real_path.unwrap_or_else(|| path.clone());
-            let _ = tx.send(DiscoveredFile {
-                path,
-                format,
-                real_path,
-            });
-            WalkState::Continue
+            ignore::WalkState::Continue
         })
     });
+    drop(tx);
 
     // Drain the channel.
     results.extend(rx);
@@ -314,6 +350,7 @@ pub fn take_files<'a>(
     files: impl IntoIterator<Item = &'a PathBuf>,
     config: &WalkConfig,
 ) -> Vec<DiscoveredFile> {
+    let rules = Rules::new(config);
     let roots: Vec<PathBuf> = config
         .paths
         .iter()
@@ -323,7 +360,7 @@ pub fn take_files<'a>(
         .into_iter()
         .filter_map(|file| {
             let root = roots.iter().find(|root| file.starts_with(root))?;
-            let format = accepts(file, root, config)?;
+            let format = rules.accepts(file, root)?;
             Some(DiscoveredFile {
                 path: file.clone(),
                 format,
@@ -353,35 +390,7 @@ fn in_git_dir(path: &Path, root: &Path) -> bool {
 /// has open, which may not be on disk yet, and about files that appear
 /// while it runs.
 pub fn accepts(path: &Path, root: &Path, config: &WalkConfig) -> Option<String> {
-    if in_git_dir(path, root) {
-        return None;
-    }
-    if let Some(pattern) = config.pattern.as_deref() {
-        let set = build_positive_glob_set(pattern);
-        let relative = path.strip_prefix(root).unwrap_or(path);
-        if !set.is_empty() && !set.is_match(relative) && !set.is_match(path) {
-            return None;
-        }
-    }
-    let format = detect_format(
-        path,
-        &config.extensions,
-        &config.formats_exts,
-        &config.formats_names,
-    )?;
-    let ignore = build_ignore_glob_set(&config.ignore_patterns);
-    if !ignore.is_empty() && ignore.is_match(path) {
-        return None;
-    }
-    if let Some(max) = config.max_size
-        && std::fs::metadata(path).is_ok_and(|meta| meta.len() > max)
-    {
-        return None;
-    }
-    if ignored_by_files(path, root, false, config.no_gitignore) {
-        return None;
-    }
-    Some(format)
+    Rules::new(config).accepts(path, root)
 }
 
 /// Whether the ignore files leave `path` out of a walk from `root`, as they
@@ -729,6 +738,145 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].path, std::fs::canonicalize(&file).unwrap());
         assert_eq!(found[0].format, "javascript");
+    }
+
+    /// `(path, format, real path)` of the files found, sorted.
+    fn found(files: &[DiscoveredFile]) -> Vec<(PathBuf, String, PathBuf)> {
+        let mut found: Vec<_> = files
+            .iter()
+            .map(|f| (f.path.clone(), f.format.clone(), f.real_path.clone()))
+            .collect();
+        found.sort();
+        found
+    }
+
+    /// A file root skips the parallel walker (issue #1306) and is taken as
+    /// the walker takes it: the rules of the config apply, the ignore files
+    /// do not, and a symlink counts only when links are followed.
+    #[test]
+    fn a_file_root_is_taken_as_the_walker_takes_it() {
+        let dir = temp_dir("file-roots");
+        write(&dir, ".gitignore", "ignored.js\n");
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        let mut files = vec![
+            write(&dir, "src/kept.js", "let a = 1;\n"),
+            write(&dir, "src/other.ts", "let b = 2;\n"),
+            write(&dir, "ignored.js", "let c = 3;\n"),
+            write(&dir, "gen/skip.js", "let d = 4;\n"),
+            write(&dir, "big.js", &"let e = 5;\n".repeat(100)),
+            write(&dir, "notes.unknown", "text\n"),
+            write(&dir, "script", "#!/usr/bin/env python3\nprint(1)\n"),
+            dir.join("missing.js"),
+            dir.join("src"),
+        ];
+        #[cfg(unix)]
+        {
+            let link = dir.join("link.js");
+            std::os::unix::fs::symlink(dir.join("src/kept.js"), &link).unwrap();
+            files.push(link);
+        }
+        // The same file by a path relative to the working directory, as a
+        // pre-commit hook passes it.
+        #[cfg(unix)]
+        {
+            let cwd = std::fs::canonicalize(std::env::current_dir().unwrap()).unwrap();
+            let up: PathBuf = cwd.components().skip(1).map(|_| "..").collect();
+            let canonical = std::fs::canonicalize(&dir).unwrap();
+            let relative = up.join(canonical.strip_prefix("/").unwrap());
+            assert!(relative.is_relative() && relative.join("src/kept.js").is_file());
+            files.push(relative.join("src/kept.js"));
+        }
+        // Where the files really are, for a rule that a stand-in tree escapes.
+        let here = format!("**/{}/**", dir.file_name().unwrap().to_string_lossy());
+        let configs = [
+            WalkConfig::default(),
+            WalkConfig {
+                ignore_patterns: vec!["**/gen/**".into()],
+                max_size: Some(100),
+                ..Default::default()
+            },
+            WalkConfig {
+                pattern: Some("src/**/*.js".into()),
+                follow_symlinks: true,
+                ..Default::default()
+            },
+            WalkConfig {
+                follow_symlinks: true,
+                ..Default::default()
+            },
+            WalkConfig {
+                extensions: vec!["typescript".into()],
+                ..Default::default()
+            },
+            WalkConfig {
+                ignore_patterns: vec!["**/elsewhere/src/**".into()],
+                match_as: vec![PathBuf::from("/elsewhere/src/kept.js")],
+                ..Default::default()
+            },
+            WalkConfig {
+                ignore_patterns: vec![here.clone()],
+                ..Default::default()
+            },
+            WalkConfig {
+                ignore_patterns: vec![here.clone()],
+                match_as: vec![PathBuf::from("/elsewhere/src/kept.js")],
+                ..Default::default()
+            },
+        ];
+        let (mut taken, mut cases) = (0, 0);
+        for config in configs {
+            for file in &files {
+                let config = WalkConfig {
+                    paths: vec![file.clone()],
+                    ..config.clone()
+                };
+                let rules = Rules::new(&config);
+                let root = Root::new(file, config.match_as.first());
+                let mut walked = Vec::new();
+                walk_dir(&root, &rules, &[], &mut walked);
+                (taken, cases) = (taken + walked.len(), cases + 1);
+                assert_eq!(
+                    found(&walk(&config)),
+                    found(&walked),
+                    "{} with {config:?}",
+                    file.display()
+                );
+            }
+        }
+        // Some files are taken and some left out, under each rule.
+        assert!(taken > 10 && taken < cases / 2, "{taken} of {cases}");
+        let one = |path: &Path, config: WalkConfig| {
+            let found = walk(&WalkConfig {
+                paths: vec![path.to_path_buf()],
+                ..config
+            });
+            assert_eq!(found.len(), 1, "{}", path.display());
+            found.into_iter().next().unwrap()
+        };
+        // The rules see a copy at the place of the tree it stands for.
+        one(
+            &dir.join("src/kept.js"),
+            WalkConfig {
+                ignore_patterns: vec![here],
+                match_as: vec![PathBuf::from("/elsewhere/src/kept.js")],
+                ..Default::default()
+            },
+        );
+        // A followed link reads the file it points to. A root is resolved
+        // whole, so a link named as one goes by its target's path too.
+        #[cfg(unix)]
+        {
+            let linked = one(
+                &dir.join("link.js"),
+                WalkConfig {
+                    follow_symlinks: true,
+                    ..Default::default()
+                },
+            );
+            let target = std::fs::canonicalize(dir.join("src/kept.js")).unwrap();
+            assert_eq!(linked.real_path, target);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
