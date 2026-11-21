@@ -291,6 +291,63 @@ jobs:
           echo "could not update the badges branch"
           exit 1
 
+  # The HTML coverage report as a page at
+  # https://pages.flisk.si/@kucherenko/rust-coverage/, so it can be read
+  # without downloading the artifact. Runs only for pushes to master and runs
+  # none of this repository's code. The whole report is about 16 MB and a page
+  # may be 10 MB, so the page keeps llvm-cov's full table (every file, the real
+  # totals) and the source views of the files with the most uncovered lines;
+  # the other files are listed without a link and stay in the artifact.
+  coverage-page:
+    name: coverage page
+    needs: [coverage]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # pages.flisk.si checks this run's OIDC token to know the repository; no secret is used
+    concurrency:
+      group: coverage-page
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: coverage
+          path: coverage
+
+      - name: Fit the report in one page
+        working-directory: coverage/html
+        run: |
+          # llvm-cov writes one coverage/<source path>.html per file, and
+          # lcov.info has the same paths. Most uncovered lines first, keep
+          # source views up to 9 MB.
+          used=0
+          awk -F: '/^SF:/ { file = $2 } /^LF:/ { found = $2 } /^LH:/ { print found - $2, file }' ../lcov.info |
+            sort -k1,1nr | while read -r missed file; do
+              page="coverage${file}.html"
+              [ -f "$page" ] || continue
+              size=$(stat -c %s "$page")
+              if [ "$missed" -gt 0 ] && [ $((used + size)) -le $((9 * 1024 * 1024)) ]; then
+                used=$((used + size))
+              else
+                rm "$page"
+              fi
+            done
+          kept=$(find coverage -name '*.html' | wc -l)
+          total=$(grep -c '^SF:' ../lcov.info)
+          # files whose source view was left out keep their row, without a link
+          perl -pi -e "s{<a href='(coverage/[^']+)'>([^<]*)</a>}{-e \$1 ? \$& : \$2}ge" index.html
+          run="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          note="Commit <code>${GITHUB_SHA::7}</code> on master, <a href='${run}'>CI run ${GITHUB_RUN_ID}</a>. Source views for the ${kept} of ${total} files with the most uncovered lines; the full report is the run's <code>coverage</code> artifact."
+          head="<title>jscpd Rust coverage</title><meta name='description' content='Line coverage of the jscpd Rust workspace on master.'>"
+          sed -i "s|<head>|<head>${head}|; s|</h4>|</h4><p>${note}</p>|" index.html
+
+      - uses: flisk-sh/pages@c1fd27b9ab0c82f42e70dfe1e1b8ad811933b127 # v1.2.4
+        continue-on-error: true # an outage of pages.flisk.si must not turn master red
+        with:
+          path: coverage/html
+          command: publish
+          slug: rust-coverage
+
   # End-to-end run of the release binary over the multi-format corpus in
   # fixtures/ (550 files across 130+ formats). Unit tests cover the parts;
   # this catches a reporter or walker regression that only shows on the
