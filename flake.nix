@@ -25,7 +25,7 @@
           file = ./rust/rust-toolchain.toml;
           # Hash of the versioned channel manifest (channel-rust-<x.y.z>.toml);
           # the toolchain file must pin an exact patch version or this drifts.
-          sha256 = "sha256-A1abGIbOtcBSdrUMhDGrER3pRM1hQP4fp9gh3Y4PKc8=";
+          sha256 = "sha256-p8h3Sl/YRByZfZTAKXdsvF6xEenXKrXSVvpphmZENH4=";
         };
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
