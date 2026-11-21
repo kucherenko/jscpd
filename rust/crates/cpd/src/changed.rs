@@ -98,9 +98,29 @@ impl Changed {
         &self.baseline_path
     }
 
-    /// The changed files, for a run that scans them alone.
-    pub fn files(&self) -> Arc<HashSet<PathBuf>> {
-        Arc::clone(&self.files)
+    /// The detection run of `config` narrowed to the changed files, or
+    /// `None` to run it as it is. `--changed-only` scans the changed files
+    /// alone; otherwise the clone passes look for their clones only. Not on
+    /// a clean tree, whose clones become the baseline of HEAD (see
+    /// [`Changed::baseline`]), nor with `--update-baseline`, which saves
+    /// every clone of the run.
+    pub fn detection_config(
+        &self,
+        config: &RunConfig,
+        changed_only: bool,
+        update_baseline: bool,
+    ) -> Option<RunConfig> {
+        let files = Some(Arc::clone(&self.files));
+        if changed_only {
+            return Some(RunConfig {
+                only_files: files,
+                ..config.clone()
+            });
+        }
+        (!self.clean && !update_baseline).then(|| RunConfig {
+            focus_files: files,
+            ..config.clone()
+        })
     }
 
     /// Which of `clones` have a fragment in a changed file.

@@ -29,6 +29,10 @@ pub struct PassContext<'a> {
     /// A source's place for the path filters (`--skip-local`,
     /// `--skip-isolated`): pairs whose labels skip each other are dropped.
     pub label: &'a (dyn Fn(&str) -> PathLabel + Sync),
+    /// Whether a source belongs to a file whose clones are wanted (see
+    /// [`crate::orchestrate::RunConfig::focus_files`]): a pass may then find
+    /// only the clones with a fragment in such a source. `None`: every clone.
+    pub focus: Option<&'a (dyn Fn(&str) -> bool + Sync)>,
 }
 
 /// A clone detection pass over whole files.
