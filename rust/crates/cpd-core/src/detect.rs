@@ -537,6 +537,10 @@ fn detect_in_group(
         // subsequent windows also match. flush_clone is called when the match breaks
         // or the file scan ends — only one clone per contiguous matching region.
         let mut open_clone: Option<OpenClone> = None;
+        // Where the last clone of this file against each other source ended,
+        // in tokens of this file: a new clone against that source does not
+        // reach back past it (see `reach_back`).
+        let mut floors: FxHashMap<usize, usize> = FxHashMap::default();
 
         let consistent = !source.renames.is_empty();
         if consistent {
@@ -611,6 +615,12 @@ fn detect_in_group(
             } else {
                 // The anchor stopped (or nothing was open): flush, then start a
                 // new clone on whatever the store matched, if anything.
+                if let Some(oc) = &open_clone {
+                    floors.insert(
+                        oc.stored_occurrence.source_id,
+                        oc.current_start + oc.match_len,
+                    );
+                }
                 flush_clone(
                     open_clone.take(),
                     file_idx,
@@ -622,10 +632,15 @@ fn detect_in_group(
                 );
                 match stored {
                     Some(stored) => {
+                        let floor = floors.get(&stored.source_id).copied().unwrap_or(0);
+                        let back = reach_back(stored, current, prepared, min_tokens, floor);
                         open_clone = Some(OpenClone {
-                            stored_occurrence: stored,
-                            current_start: token_start,
-                            match_len: min_tokens,
+                            stored_occurrence: Occurrence {
+                                source_id: stored.source_id,
+                                token_start: stored.token_start - back,
+                            },
+                            current_start: token_start - back,
+                            match_len: min_tokens + back,
                         });
                     }
                     None => {
@@ -895,6 +910,44 @@ fn window_continues(
     let last_a = anchor.token_start + min_tokens - 1;
     let last_b = current.token_start + min_tokens - 1;
     last_a < a.hashes.len() && last_b < b.hashes.len() && a.hashes[last_a] == b.hashes[last_b]
+}
+
+/// How many tokens before the windows at `stored` and `current` match as
+/// well, so that a clone opened on them starts where the two sources start
+/// to agree (issue #1319). The store keeps one occurrence of a window, the
+/// first: when a third source holds the start of what two others share, the
+/// windows of that start are stored for the third source, and the clone of
+/// the two opens on the first window the third one lacks, some tokens into
+/// the text they share. Its start then depended on the other files of the
+/// scan and on their order.
+///
+/// The clone does not reach back past `floor`, the end of the last clone of
+/// the current source against the same other source: the two would overlap
+/// on one pair of files, as copies of a repeating text do.
+fn reach_back(
+    stored: Occurrence,
+    current: Occurrence,
+    prepared: &[PreparedSource],
+    min_tokens: usize,
+    floor: usize,
+) -> usize {
+    let (a, b) = (&prepared[stored.source_id], &prepared[current.source_id]);
+    let most = stored
+        .token_start
+        .min(current.token_start.saturating_sub(floor));
+    // Two copies in one file do not grow into each other this way.
+    let most = match stored.source_id == current.source_id {
+        true => most.min(
+            current
+                .token_start
+                .abs_diff(stored.token_start)
+                .saturating_sub(min_tokens),
+        ),
+        false => most,
+    };
+    (1..=most)
+        .take_while(|&k| a.hashes[stored.token_start - k] == b.hashes[current.token_start - k])
+        .count()
 }
 
 /// Flush an open clone to the clones list.
@@ -1426,6 +1479,10 @@ fn add_secondary_clones(
     }
     candidates.sort_unstable();
     candidates.dedup();
+    drop_reported(&mut candidates, prepared, clones, min_tokens);
+    if candidates.is_empty() {
+        return;
+    }
 
     // Build line-coverage from already-found primary clones.
     let mut coverage = LineCoverage::from_clones(prepared, clones);
@@ -1497,6 +1554,59 @@ fn add_secondary_clones(
         clones,
         &mut coverage,
     );
+}
+
+/// Drops the candidates that lie in a primary clone of their two sources at
+/// the same distance between the copies: the clone holds those tokens
+/// already. Such a candidate used to start where the primary clone did, and
+/// went out with the duplicates; a clone that reaches back ([`reach_back`])
+/// starts earlier than the windows it was found by.
+fn drop_reported(
+    candidates: &mut Vec<Candidate>,
+    prepared: &[PreparedSource],
+    clones: &[CpdClone],
+    min_tokens: usize,
+) {
+    let ids: FxHashMap<&str, usize> = prepared
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.id.as_str(), i))
+        .collect();
+    // The token ranges of the first copy, by the two sources and the start
+    // of the second copy less the start of the first.
+    let mut reported: FxHashMap<(usize, usize, isize), Vec<(usize, usize)>> = FxHashMap::default();
+    for clone in clones {
+        let (Some(&a), Some(&b)) = (
+            ids.get(clone.fragment_a.source_id.as_str()),
+            ids.get(clone.fragment_b.source_id.as_str()),
+        ) else {
+            continue;
+        };
+        let (ra, rb) = (clone.fragment_a.range, clone.fragment_b.range);
+        let (a, b, ra, rb) = match (a, ra[0]) <= (b, rb[0]) {
+            true => (a, b, ra, rb),
+            false => (b, a, rb, ra),
+        };
+        reported
+            .entry((a, b, rb[0] as isize - ra[0] as isize))
+            .or_default()
+            .push((ra[0] as usize, ra[1] as usize));
+    }
+    if reported.is_empty() {
+        return;
+    }
+    candidates.retain(|c| {
+        let key = (
+            c.source_a,
+            c.source_b,
+            c.token_b as isize - c.token_a as isize,
+        );
+        !reported.get(&key).is_some_and(|ranges| {
+            ranges
+                .iter()
+                .any(|&(start, end)| start <= c.token_a && c.token_a + min_tokens - 1 <= end)
+        })
+    });
 }
 
 fn flush_secondary_clone(
@@ -2067,6 +2177,76 @@ mod tests {
         }
     }
 
+    /// A source of `hashes`, one token on each line.
+    fn token_per_line(id: &str, hashes: Vec<u64>) -> PreparedSource {
+        let spans = (0..hashes.len())
+            .map(|i| {
+                let loc = Location {
+                    line: i as u32 + 1,
+                    column: 1,
+                    offset: i as u32,
+                };
+                (loc.clone(), loc)
+            })
+            .collect();
+        make_prepared(id, "javascript", hashes, spans)
+    }
+
+    /// The token ranges of the clones of `clones` between two sources, as
+    /// `(range in first, range in second)`.
+    fn ranges_between(clones: &[CpdClone], first: &str, second: &str) -> Vec<([u32; 2], [u32; 2])> {
+        clones
+            .iter()
+            .filter(|c| c.fragment_a.source_id == first && c.fragment_b.source_id == second)
+            .map(|c| (c.fragment_a.range, c.fragment_b.range))
+            .collect()
+    }
+
+    /// Issue #1319: `b` and `c` are the same text, a head and a body, and a
+    /// third source holds the head alone. Scanned before them, it takes the
+    /// windows of the head in the store, and the clone of `b` and `c` used
+    /// to open on the first window with a token of the body.
+    #[test]
+    fn a_clone_starts_where_its_two_sources_start_to_agree() {
+        let head: Vec<u64> = (100..108).collect();
+        let body: Vec<u64> = (200..210).collect();
+        let text = [head.clone(), body].concat();
+        let other = [vec![1, 2, 3], head].concat();
+        let whole = [0, text.len() as u32 - 1];
+        // The third source first, last, and not there at all.
+        for third in [Some("a"), Some("z"), None] {
+            let mut group = vec![
+                token_per_line("b", text.clone()),
+                token_per_line("c", text.clone()),
+            ];
+            if let Some(id) = third {
+                group.push(token_per_line(id, other.clone()));
+            }
+            group.sort_by(|x, y| x.id.cmp(&y.id));
+            let clones = detect_prepared(vec![group], 5, 0, &PathFilters::default());
+            assert_eq!(
+                ranges_between(&clones, "b", "c"),
+                [(whole, whole)],
+                "third source: {third:?}"
+            );
+        }
+    }
+
+    /// A clone reaches back no further than the last clone of the same two
+    /// sources ended: `c` holds the text of `a` twice with nothing between,
+    /// and the two clones do not overlap.
+    #[test]
+    fn a_clone_does_not_reach_back_into_the_one_before_it() {
+        let text: Vec<u64> = (100..110).collect();
+        let twice = [text.clone(), text.clone()].concat();
+        let group = vec![token_per_line("a", text), token_per_line("c", twice)];
+        let clones = detect_prepared(vec![group], 5, 0, &PathFilters::default());
+        assert_eq!(
+            ranges_between(&clones, "a", "c"),
+            [([0, 9], [0, 9]), ([0, 9], [10, 19])]
+        );
+    }
+
     fn js_tokens_ab() -> Vec<Token> {
         vec![
             make_token(TokenKind::Keyword, "function", 1, 0, 0),
@@ -2184,23 +2364,10 @@ mod tests {
         let c = stream(&[&x, &t, &z]);
         let streams: Vec<(&str, Vec<u64>)> =
             vec![("a", a.clone()), ("b", b.clone()), ("c", c.clone())];
-        let to_prepared = |id: &str, hashes: Vec<u64>| {
-            let spans = (0..hashes.len())
-                .map(|i| {
-                    let loc = Location {
-                        line: i as u32 + 1,
-                        column: 1,
-                        offset: i as u32,
-                    };
-                    (loc.clone(), loc)
-                })
-                .collect();
-            make_prepared(id, "javascript", hashes, spans)
-        };
         let group = vec![
-            to_prepared("a", a),
-            to_prepared("b", b),
-            to_prepared("c", c),
+            token_per_line("a", a),
+            token_per_line("b", b),
+            token_per_line("c", c),
         ];
         let clones = detect_prepared(vec![group], min_tokens, 0, &PathFilters::default());
         let a_c: Vec<&CpdClone> = clones
