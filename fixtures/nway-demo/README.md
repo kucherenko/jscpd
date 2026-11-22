@@ -51,6 +51,10 @@ agree (see `stolen-head/` below); before, it was a few tokens on one line
 and fell under `--min-lines`. Scanned alone, the two files give the same
 pair.
 
+`--ignore-identifiers` and `--ignore-identifiers=blind` report the same four
+pairs, and the pairs where only the names differ start at line 1 as
+`renamed` (`Found 4 clones.`).
+
 ## `stolen-head/` — a third file must not move the start of a clone
 
 `orders.md` and `users.md` hold the same table. `catalog.md` ends with the

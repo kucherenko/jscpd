@@ -652,6 +652,40 @@ fn config_ignore_pattern_without_glob_chars_is_applied() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A clone that reaches back to where its two files start to agree (issue
+/// #1319) is not reported a second time by the windows inside it: the two
+/// protobuf fixtures, which differ in names only, give two clones that don't
+/// overlap under `--ignore-identifiers`.
+#[test]
+fn a_clone_is_not_reported_again_over_its_own_lines() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/protobuf");
+    let dir = std::env::temp_dir().join(format!("cpd-reach-back-{}", std::process::id()));
+    let out = std::env::temp_dir().join(format!("cpd-reach-back-report-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for name in ["file1.proto", "file2.proto"] {
+        std::fs::copy(fixtures.join(name), dir.join(name)).unwrap();
+    }
+    let (json, _) = scan_json(&dir, &out, &["--min-tokens", "50", "--ignore-identifiers"]);
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&out);
+    let lines: Vec<(u64, u64)> = json["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| {
+            (
+                d["firstFile"]["start"].as_u64().unwrap(),
+                d["firstFile"]["end"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(lines, [(1, 44), (49, 103)]);
+}
+
 /// Type-2 detection (issue #998): renamed identifiers are only a clone with
 /// `--ignore-identifiers`, and such a clone is reported as `kind: renamed`
 /// while an exact copy in the same run stays `kind: exact`.

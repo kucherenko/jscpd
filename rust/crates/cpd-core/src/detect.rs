@@ -615,12 +615,8 @@ fn detect_in_group(
             } else {
                 // The anchor stopped (or nothing was open): flush, then start a
                 // new clone on whatever the store matched, if anything.
-                if let Some(oc) = &open_clone {
-                    floors.insert(
-                        oc.stored_occurrence.source_id,
-                        oc.current_start + oc.match_len,
-                    );
-                }
+                let other = open_clone.as_ref().map(|oc| oc.stored_occurrence.source_id);
+                let reported = clones.len();
                 flush_clone(
                     open_clone.take(),
                     file_idx,
@@ -630,10 +626,19 @@ fn detect_in_group(
                     filters,
                     &mut clones,
                 );
+                // Only a clone that went out stops the next one: one dropped
+                // under `--min-lines` covers nothing in the report.
+                let end = clones[reported..]
+                    .iter()
+                    .map(|c| c.fragment_b.range[1] as usize + 1)
+                    .max();
+                if let (Some(other), Some(end)) = (other, end) {
+                    floors.insert(other, end);
+                }
                 match stored {
                     Some(stored) => {
                         let floor = floors.get(&stored.source_id).copied().unwrap_or(0);
-                        let back = reach_back(stored, current, prepared, min_tokens, floor);
+                        let back = reach_back(stored, current, prepared, floor);
                         open_clone = Some(OpenClone {
                             stored_occurrence: Occurrence {
                                 source_id: stored.source_id,
@@ -921,32 +926,36 @@ fn window_continues(
 /// the text they share. Its start then depended on the other files of the
 /// scan and on their order.
 ///
-/// The clone does not reach back past `floor`, the end of the last clone of
-/// the current source against the same other source: the two would overlap
-/// on one pair of files, as copies of a repeating text do.
+/// The clone reaches back
+/// - not past `floor`, the end of the last reported clone of the current
+///   source against the same other source, so the two don't overlap on one
+///   pair of files, as copies of a repeating text would;
+/// - not onto a token on a later line than the window starts, where a
+///   stream put tokens out of the order of the text (issue #1221): the
+///   fragment would go back and be dropped.
+///
+/// It compares the tokens alone, as a clone grows forward. With names
+/// matched consistently, a clone that reaches back past a name that would
+/// stand for two is cut there by [`consistent_runs`], into the parts the
+/// two sources give scanned alone. Two copies in one file reach back as
+/// two files do, so a clone between them is the one the file gives scanned
+/// alone.
 fn reach_back(
     stored: Occurrence,
     current: Occurrence,
     prepared: &[PreparedSource],
-    min_tokens: usize,
     floor: usize,
 ) -> usize {
     let (a, b) = (&prepared[stored.source_id], &prepared[current.source_id]);
-    let most = stored
-        .token_start
-        .min(current.token_start.saturating_sub(floor));
-    // Two copies in one file do not grow into each other this way.
-    let most = match stored.source_id == current.source_id {
-        true => most.min(
-            current
-                .token_start
-                .abs_diff(stored.token_start)
-                .saturating_sub(min_tokens),
-        ),
-        false => most,
-    };
+    let (sa, sb) = (stored.token_start, current.token_start);
+    let most = sa.min(sb.saturating_sub(floor));
+    let (line_a, line_b) = (a.spans[sa].0.line, b.spans[sb].0.line);
     (1..=most)
-        .take_while(|&k| a.hashes[stored.token_start - k] == b.hashes[current.token_start - k])
+        .take_while(|&k| {
+            a.hashes[sa - k] == b.hashes[sb - k]
+                && a.spans[sa - k].0.line <= line_a
+                && b.spans[sb - k].0.line <= line_b
+        })
         .count()
 }
 
@@ -1556,11 +1565,13 @@ fn add_secondary_clones(
     );
 }
 
-/// Drops the candidates that lie in a primary clone of their two sources at
-/// the same distance between the copies: the clone holds those tokens
-/// already. Such a candidate used to start where the primary clone did, and
-/// went out with the duplicates; a clone that reaches back ([`reach_back`])
-/// starts earlier than the windows it was found by.
+/// Drops the candidates whose window overlaps a primary clone of their two
+/// sources at the same distance between the copies: the clone holds those
+/// tokens already, and a run of such windows that starts before it would go
+/// out as a second clone over its first lines. These candidates used to
+/// start where the primary clone did and went out with the duplicates; a
+/// clone that reaches back ([`reach_back`]) starts earlier than the windows
+/// it was found by.
 fn drop_reported(
     candidates: &mut Vec<Candidate>,
     prepared: &[PreparedSource],
@@ -1604,7 +1615,7 @@ fn drop_reported(
         !reported.get(&key).is_some_and(|ranges| {
             ranges
                 .iter()
-                .any(|&(start, end)| start <= c.token_a && c.token_a + min_tokens - 1 <= end)
+                .any(|&(start, end)| start < c.token_a + min_tokens && c.token_a <= end)
         })
     });
 }
@@ -2232,19 +2243,100 @@ mod tests {
         }
     }
 
-    /// A clone reaches back no further than the last clone of the same two
-    /// sources ended: `c` holds the text of `a` twice with nothing between,
-    /// and the two clones do not overlap.
+    /// A clone reaches back no further than `floor`, where the last clone
+    /// of the same two sources ended, though the tokens before match.
     #[test]
-    fn a_clone_does_not_reach_back_into_the_one_before_it() {
-        let text: Vec<u64> = (100..110).collect();
-        let twice = [text.clone(), text.clone()].concat();
-        let group = vec![token_per_line("a", text), token_per_line("c", twice)];
+    fn a_clone_does_not_reach_back_past_the_floor() {
+        let text: Vec<u64> = (100..120).collect();
+        let prepared = vec![token_per_line("a", text.clone()), token_per_line("c", text)];
+        let at = |source_id| Occurrence {
+            source_id,
+            token_start: 10,
+        };
+        assert_eq!(reach_back(at(0), at(1), &prepared, 0), 10);
+        assert_eq!(reach_back(at(0), at(1), &prepared, 6), 4);
+        assert_eq!(reach_back(at(0), at(1), &prepared, 10), 0);
+    }
+
+    /// `a` ends with the second half of `t` and holds `t` after it; `c`
+    /// holds `t` twice. The first clone of `c` against `a`, the first copy,
+    /// spans fewer lines than `--min-lines` and is not reported, so the
+    /// second reaches back over its tokens; it stopped at the first one's
+    /// end before.
+    #[test]
+    fn a_clone_dropped_under_min_lines_does_not_stop_the_next_one() {
+        let t: Vec<u64> = (100..110).collect();
+        let a = [t[5..].to_vec(), t.clone()].concat();
+        let c = [t.clone(), t].concat();
+        let group = vec![token_per_line("a", a), token_per_line("c", c)];
+        let clones = detect_prepared(vec![group], 5, 10, &PathFilters::default());
+        assert_eq!(ranges_between(&clones, "a", "c"), [([0, 14], [5, 19])]);
+    }
+
+    /// Two copies in one file give the clone the file gives scanned alone,
+    /// when another file holds the start of the copies.
+    #[test]
+    fn a_clone_in_one_file_does_not_depend_on_another_file() {
+        let head: Vec<u64> = (100..108).collect();
+        let f = [head.clone(), head.clone(), head.clone()].concat();
+        let detect = |group| {
+            let clones = detect_prepared(vec![group], 5, 0, &PathFilters::default());
+            ranges_between(&clones, "f", "f")
+        };
+        let alone = detect(vec![token_per_line("f", f.clone())]);
+        assert!(!alone.is_empty());
+        let with_head = detect(vec![token_per_line("a", head), token_per_line("f", f)]);
+        assert_eq!(with_head, alone);
+    }
+
+    /// A clone does not reach back onto tokens a stream put on later lines
+    /// (issue #1221): the fragment would go back, and the clone be dropped.
+    #[test]
+    fn a_clone_does_not_reach_back_onto_a_later_line() {
+        let hashes: Vec<u64> = (100..120).collect();
+        // The first three tokens sit after the others in the text.
+        let lines: Vec<u32> = (0..20u32)
+            .map(|i| if i < 3 { 100 + i } else { i - 2 })
+            .collect();
+        let source = |id: &str, n: usize| {
+            let spans = lines[..n]
+                .iter()
+                .map(|&line| {
+                    let loc = Location {
+                        line,
+                        column: 1,
+                        offset: line,
+                    };
+                    (loc.clone(), loc)
+                })
+                .collect();
+            make_prepared(id, "javascript", hashes[..n].to_vec(), spans)
+        };
+        let group = vec![source("a", 8), source("b", 20), source("c", 20)];
         let clones = detect_prepared(vec![group], 5, 0, &PathFilters::default());
-        assert_eq!(
-            ranges_between(&clones, "a", "c"),
-            [([0, 9], [0, 9]), ([0, 9], [10, 19])]
-        );
+        assert_eq!(ranges_between(&clones, "b", "c"), [([3, 19], [3, 19])]);
+    }
+
+    /// With names matched consistently, a clone reaches back past a name
+    /// that would stand for two and is cut there: `q` stands for `p` in the
+    /// first two statements of `c`, so `b` and `c` give two parts. A third
+    /// source with the start of `b` gives the same two.
+    #[test]
+    fn a_clone_reaches_back_past_a_name_that_stands_for_two() {
+        let b = "p = q + 1 ; w = p * 2 ; r = p + q ; s = r * p ; u = s - r ;";
+        let c = "q = p + 1 ; w = q * 2 ; r = p + q ; s = r * p ; u = s - r ;";
+        let head: String = b.split_whitespace().take(16).collect::<Vec<_>>().join(" ");
+        let detect = |with_head: bool| {
+            let mut group = vec![renamed_source("b", b, true), renamed_source("c", c, true)];
+            if with_head {
+                group.insert(0, renamed_source("a", &head, true));
+            }
+            let clones = detect_prepared(vec![group], 10, 0, &PathFilters::default());
+            ranges_between(&clones, "b", "c")
+        };
+        let alone = detect(false);
+        assert_eq!(alone, [([0, 13], [0, 13]), ([14, 29], [14, 29])]);
+        assert_eq!(detect(true), alone);
     }
 
     fn js_tokens_ab() -> Vec<Token> {

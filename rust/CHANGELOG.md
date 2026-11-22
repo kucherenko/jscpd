@@ -4,6 +4,12 @@ All notable changes to **cpd (Rust)** are documented here. Releases follow [Sema
 
 ---
 
+## Unreleased
+
+### Bug Fixes
+
+- **Another file in the scan could move the start of a clone.** Detection keeps the first copy of every run of tokens it has seen. When a file scanned earlier held the start of the code two other files share, those tokens were taken by it, and the clone of the two files started a few tokens later, sometimes in the middle of a line. Adding, removing or renaming an unrelated file changed the clone's range and its fingerprint, so `--baseline` reported it as new. A clone now starts where its two files start to match, whatever else is scanned. Clones that were cut short get longer, so duplicated lines and percentages can go up, and a baseline saved by an earlier version reports each such clone as new once: run `--update-baseline` after upgrading. Reported by [@Emkej](https://github.com/Emkej). ([#1319](https://github.com/kucherenko/jscpd/issues/1319), [#1320](https://github.com/kucherenko/jscpd/pull/1320))
+
 ## 5.4.3
 
 ### New Features
