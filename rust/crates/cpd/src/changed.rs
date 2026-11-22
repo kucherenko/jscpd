@@ -514,6 +514,22 @@ mod tests {
     }
 
     #[test]
+    fn a_jj_workspace_without_git_is_refused_by_name() {
+        // The nearest version control folder decides, so an enclosing
+        // repository of the machine does not get in the way here.
+        let root = project(&[("a.js", "export const a = 1;\n")]);
+        std::fs::create_dir_all(root.join(".jj/repo/store")).unwrap();
+        match Changed::list(&[root], None) {
+            Err(message) => {
+                assert!(message.starts_with("--changed: "), "{message}");
+                assert!(message.contains("jj workspace"), "{message}");
+                assert!(message.contains("jj git colocation enable"), "{message}");
+            }
+            Ok(_) => panic!("a jj workspace without .git has no git to ask"),
+        }
+    }
+
+    #[test]
     fn a_clone_stays_when_either_fragment_is_in_a_changed_file() {
         let root = repo(&[
             ("a.js", "export const a = 1;\n"),

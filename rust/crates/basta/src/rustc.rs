@@ -126,10 +126,11 @@ pub fn sources(roots: &[PathBuf], no_gitignore: bool) -> Sources {
         let mut walk = ignore::WalkBuilder::new(root);
         walk.git_ignore(!no_gitignore).filter_entry(|entry| {
             !(entry.file_type().is_some_and(|t| t.is_dir())
-                && matches!(
-                    entry.file_name().to_string_lossy().as_ref(),
-                    ".git" | "target" | "node_modules"
-                ))
+                && (cpd_finder::walker::is_vcs_dir(entry.file_name())
+                    || matches!(
+                        entry.file_name().to_string_lossy().as_ref(),
+                        "target" | "node_modules"
+                    )))
         });
         for entry in walk.build().flatten() {
             let path = entry.path();

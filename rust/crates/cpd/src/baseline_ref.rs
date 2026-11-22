@@ -35,13 +35,24 @@ pub(crate) fn git(repo_root: &Path) -> Command {
 }
 
 /// The git repository of the first scan path. `flag` names the option in
-/// error messages.
+/// error messages. A jj workspace counts when it is colocated with git: the
+/// git commands behind these options need its `.git`.
 pub(crate) fn repo_of(paths: &[PathBuf], flag: &str) -> Result<PathBuf, String> {
     let first = paths
         .first()
         .ok_or_else(|| format!("{flag}: no scan paths given"))?;
-    crate::find_git_root(first)
-        .ok_or_else(|| format!("{flag}: {} is not inside a git repository", first.display()))
+    match crate::find_vcs_root(first) {
+        Some((root, crate::Vcs::Git)) => Ok(root),
+        Some((_, crate::Vcs::Jj)) => Err(format!(
+            "{flag}: {} is a jj workspace that is not colocated with git; {flag} needs a .git \
+             checkout (`jj git colocation enable`)",
+            first.display()
+        )),
+        None => Err(format!(
+            "{flag}: {} is not inside a git repository",
+            first.display()
+        )),
+    }
 }
 
 /// `path`, canonicalized, relative to `repo_root`. `flag` names the option

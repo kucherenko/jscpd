@@ -455,17 +455,17 @@ fn script_mentions(modules: &[Module], roots: &[PathBuf]) -> FxHashSet<usize> {
             // walked; the ones that are never a project's own scripts are not.
             let name = entry.file_name().to_string_lossy();
             !(entry.file_type().is_some_and(|t| t.is_dir())
-                && matches!(
-                    name.as_ref(),
-                    ".git"
-                        | "node_modules"
-                        | "target"
-                        | "dist"
-                        | "build"
-                        | ".venv"
-                        | "venv"
-                        | "__pycache__"
-                ))
+                && (cpd_finder::walker::is_vcs_dir(entry.file_name())
+                    || matches!(
+                        name.as_ref(),
+                        "node_modules"
+                            | "target"
+                            | "dist"
+                            | "build"
+                            | ".venv"
+                            | "venv"
+                            | "__pycache__"
+                    )))
         });
         for entry in walk.build().flatten() {
             if !entry.file_type().is_some_and(|t| t.is_file())
