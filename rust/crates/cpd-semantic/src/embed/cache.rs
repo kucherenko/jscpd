@@ -154,8 +154,10 @@ pub fn load(path: &Path) -> Cache {
     for chunk in bytes[12..].chunks_exact(record) {
         let key = u128::from_le_bytes(chunk[..16].try_into().unwrap_or_default());
         let vector = chunk[16..]
-            .chunks_exact(4)
-            .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| f32::from_le_bytes(*b))
             .collect();
         vectors.insert(key, vector);
     }

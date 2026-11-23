@@ -935,14 +935,9 @@ impl VectorSpace {
 pub(crate) fn dot(a: &[f32], b: &[f32]) -> f32 {
     // Eight independent lanes let the compiler vectorize the loop.
     let mut lanes = [0f32; 8];
-    let (chunks_a, chunks_b) = (a.chunks_exact(8), b.chunks_exact(8));
-    let tail: f32 = chunks_a
-        .remainder()
-        .iter()
-        .zip(chunks_b.remainder())
-        .map(|(x, y)| x * y)
-        .sum();
-    for (x, y) in chunks_a.zip(chunks_b) {
+    let ((chunks_a, tail_a), (chunks_b, tail_b)) = (a.as_chunks::<8>(), b.as_chunks::<8>());
+    let tail: f32 = tail_a.iter().zip(tail_b).map(|(x, y)| x * y).sum();
+    for (x, y) in chunks_a.iter().zip(chunks_b) {
         for k in 0..8 {
             lanes[k] += x[k] * y[k];
         }

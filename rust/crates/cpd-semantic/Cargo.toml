@@ -23,14 +23,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 # JavaScript and TypeScript functions
-oxc_parser = "0.158"
-oxc_allocator = "0.158"
-oxc_span = "0.158"
-oxc_ast = "0.158"
-oxc_ast_visit = "0.158"
+oxc_parser = "0.159"
+oxc_allocator = "0.159"
+oxc_span = "0.159"
+oxc_ast = "0.159"
+oxc_ast_visit = "0.159"
 # Python functions
-ruff_python_ast = "0.0.21"
-ruff_python_parser = "0.0.21"
+ruff_python_ast = "0.0.22"
+ruff_python_parser = "0.0.22"
 # A stack for dropping a Python syntax tree nested deeper than the walk goes
 stacker = "0.1"
 # Functions of the languages below (one tree-sitter grammar each)

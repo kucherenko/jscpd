@@ -57,17 +57,7 @@ pub fn compute<'a>(
         }
     }
 
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let detection_date = {
-        let duration = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default();
-        let secs = duration.as_secs();
-        let millis = duration.subsec_millis();
-        chrono::DateTime::from_timestamp(secs as i64, millis * 1_000_000)
-            .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
-            .unwrap_or_else(|| format!("{secs}"))
-    };
+    let detection_date = cpd_core::time::now_iso8601();
 
     Statistics {
         total: StatRow {

@@ -27,17 +27,16 @@ cpd-core = { version = "0.1.23", path = "../cpd-core" }
 cpd-finder = { version = "0.1.22", path = "../cpd-finder" }
 cpd-reporter = { version = "0.1.24", path = "../cpd-reporter" }
 cpd-tokenizer = { version = "0.1.22", path = "../cpd-tokenizer" }
-oxc_allocator = "0.158"
-oxc_ast = "0.158"
-oxc_ast_visit = "0.158"
-oxc_parser = "0.158"
-oxc_semantic = "0.158"
-oxc_span = "0.158"
-oxc_syntax = "0.158"
-ruff_python_ast = "0.0.21"
-ruff_python_parser = "0.0.21"
+oxc_allocator = "0.159"
+oxc_ast = "0.159"
+oxc_ast_visit = "0.159"
+oxc_parser = "0.159"
+oxc_semantic = "0.159"
+oxc_span = "0.159"
+oxc_syntax = "0.159"
+ruff_python_ast = "0.0.22"
+ruff_python_parser = "0.0.22"
 rustc-hash = "2"
-chrono = "0.4"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

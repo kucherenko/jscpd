@@ -22,7 +22,6 @@ use crate::rustc;
 use cpd_finder::walker::{WalkConfig, walk};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Everything a run produced, plus the graph it was derived from so callers
 /// that want more than the findings (the MCP server, tests) need not rebuild it.
@@ -352,18 +351,8 @@ fn stats(graph: &Graph, findings: &[Finding], total_lines: u32, entry_points: us
         } else {
             (f64::from(dead_lines) / f64::from(total_lines)) * 100.0
         },
-        detection_date: now_iso8601(),
+        detection_date: cpd_core::time::now_iso8601(),
     }
-}
-
-pub(crate) fn now_iso8601() -> String {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let seconds = duration.as_secs();
-    chrono::DateTime::from_timestamp(seconds as i64, duration.subsec_millis() * 1_000_000)
-        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
-        .unwrap_or_else(|| seconds.to_string())
 }
 
 #[cfg(test)]
