@@ -122,6 +122,11 @@ fn classify_word(word: &str) -> TokenKind {
     TokenKind::Identifier
 }
 
+/// Whether `format` writes a color as `#` and hex digits, as in `#fee3c909`.
+fn has_hex_colors(format: &str) -> bool {
+    matches!(format, "css" | "less" | "sass" | "scss" | "stylus")
+}
+
 /// A line being cut into tokens: its characters, how far the cut has reached,
 /// and the column that position sits at. Columns count UTF-8 bytes, as token
 /// offsets do.
@@ -256,6 +261,19 @@ impl<'a> LineCursor<'a> {
         };
         self.emit_from(kind, start, start_col);
     }
+
+    /// The length of the hex color at the cursor, which sits on a `#`: 3, 4,
+    /// 6 or 8 hex digits follow it, and no other character of a name, so an
+    /// id selector such as `#add-button` is none.
+    fn hex_color_len(&self) -> Option<usize> {
+        let digits = (1..)
+            .take_while(|&ahead| self.peek(ahead).is_some_and(|c| c.is_ascii_hexdigit()))
+            .count();
+        let name_goes_on = self
+            .peek(1 + digits)
+            .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '-');
+        (matches!(digits, 3 | 4 | 6 | 8) && !name_goes_on).then_some(1 + digits)
+    }
 }
 
 /// Whether a line comment in this style starts at the cursor.
@@ -279,6 +297,7 @@ fn tokenize_line_content(
     line_num: u32,
     line_offset: u32,
     style: CommentStyle,
+    hex_colors: bool,
     in_ignore: bool,
     in_block_comment: &mut bool,
 ) -> Vec<Token> {
@@ -306,6 +325,14 @@ fn tokenize_line_content(
             });
         } else if ch.is_alphabetic() || ch == '_' {
             cursor.take_word();
+        } else if ch == '#'
+            && hex_colors
+            && let Some(len) = cursor.hex_color_len()
+        {
+            // Read as `#` and a word, `#fee3c909` was a name, which
+            // `--ignore-identifiers` renames: a list of colors then matched
+            // itself one line down.
+            cursor.take(cursor.kind(TokenKind::Literal), len);
         } else {
             cursor.take(cursor.kind(TokenKind::Punctuation), 1);
         }
@@ -344,6 +371,7 @@ pub fn tokenize_generic(source: &str, format: &str) -> Vec<Token> {
     }
 
     let style = comment_style(format);
+    let hex_colors = has_hex_colors(format);
     let mut tokens = Vec::new();
     let mut in_ignore = false;
     let mut in_block_comment = false;
@@ -374,6 +402,7 @@ pub fn tokenize_generic(source: &str, format: &str) -> Vec<Token> {
             line_num,
             offset,
             style,
+            hex_colors,
             in_ignore,
             &mut in_block_comment,
         );
@@ -580,6 +609,41 @@ The next line.
             assert!(comment_lines(source, format).is_empty(), "{format}");
             let tokens = tokenize_generic(source, format);
             assert_eq!(tokens.last().map(|t| t.start.line), Some(2), "{format}");
+        }
+    }
+
+    #[test]
+    fn a_hex_color_is_one_literal_in_style_sheets() {
+        for format in ["css", "less", "sass", "scss", "stylus"] {
+            for color in ["#fff", "#FFFF", "#fee3c9", "#fee3c909", "#9b1c0002"] {
+                let source = format!("a {{ color: {color}; }}\n");
+                let tokens = tokenize_generic(&source, format);
+                assert!(
+                    tokens
+                        .iter()
+                        .any(|t| t.kind == TokenKind::Literal && t.value == color),
+                    "{format}: {color} must be one literal"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_id_selector_or_interpolation_is_not_a_hex_color() {
+        for (format, selector) in [
+            ("css", "#header"),
+            ("css", "#add-button"),
+            ("css", "#fade_in"),
+            ("css", "#a1b2c"),
+            ("scss", "#{$name}"),
+        ] {
+            let source = format!("{selector} {{ margin: 0; }}\n");
+            let tokens = tokenize_generic(&source, format);
+            assert_eq!(
+                (&tokens[0].kind, tokens[0].value.as_str()),
+                (&TokenKind::Punctuation, "#"),
+                "{selector}"
+            );
         }
     }
 
