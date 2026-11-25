@@ -70,7 +70,7 @@ jscpd [OPTIONS] [PATH]...
 jscpd [OPTIONS] [PATH]...
 ```
 
-jscpd scans several paths together, as one project. When one path lies inside another, jscpd reads each file under it once. See [`fixtures/nested-paths-demo`](../fixtures/nested-paths-demo/README.md).
+jscpd scans several paths together, as one project. When one path lies inside another, jscpd reads each file under it once. See [`fixtures/nested-paths-demo`](../fixtures/nested-paths-demo/README.md). Reports name a file by its path from the folder that holds all the scan paths, so `dir-a/b.ts` and `dir-b/b.ts` stay apart. See [`fixtures/same-name-demo`](../fixtures/same-name-demo/README.md).
 
 A path can be a file, as in a pre-commit hook that passes the staged files. A file you name gets the format filters, `--pattern`, `--ignore` and `--max-size`, but not the ignore files: jscpd reads it even when `.gitignore` lists it. A named symlink is skipped unless `--follow-symlinks` is set, as in a walk. With it, the report names the file the link points to, while a link found in a folder keeps its own name. See [`fixtures/file-list-demo`](../fixtures/file-list-demo/README.md) for the rules and for timings of a long file list.
 

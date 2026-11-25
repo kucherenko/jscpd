@@ -947,9 +947,11 @@ fn detect_and_report(
 }
 
 /// Canonical scan roots, a file's being its directory, so fragment paths can
-/// be stripped of them (macOS /var → /private/var included).
+/// be stripped of them (macOS /var → /private/var included). Several roots
+/// give way to the folder that holds them all, so `dir-a/b.ts` and
+/// `dir-b/b.ts` don't both show as `b.ts` (#1324).
 fn canonical_roots(paths: &[PathBuf]) -> Vec<PathBuf> {
-    paths
+    let roots: Vec<PathBuf> = paths
         .iter()
         .map(|p| {
             let canonical = std::fs::canonicalize(p).unwrap_or_else(|_| p.clone());
@@ -961,7 +963,25 @@ fn canonical_roots(paths: &[PathBuf]) -> Vec<PathBuf> {
                 false => canonical,
             }
         })
-        .collect()
+        .collect();
+    match common_ancestor(&roots) {
+        Some(common) => vec![common],
+        None => roots,
+    }
+}
+
+/// The deepest folder that holds every root; none for roots on two drives.
+fn common_ancestor(roots: &[PathBuf]) -> Option<PathBuf> {
+    let (first, rest) = roots.split_first()?;
+    let mut common = first.clone();
+    for root in rest {
+        while !root.starts_with(&common) {
+            if !common.pop() {
+                return None;
+            }
+        }
+    }
+    Some(common)
 }
 
 /// Make source ids scan-root-relative for display and SARIF, keeping the scan
@@ -1633,6 +1653,17 @@ mod tests {
         relativize_to_scan_root(&mut frag, &roots);
         assert_eq!(frag.source_id, "frontend/src/foo.rs");
         assert_eq!(frag.source_root.as_deref(), Some("/project"));
+    }
+
+    #[test]
+    fn several_roots_show_paths_from_the_folder_that_holds_them() {
+        let roots =
+            |paths: &[&str]| common_ancestor(&paths.iter().map(PathBuf::from).collect::<Vec<_>>());
+        assert_eq!(roots(&["/p/dir-a", "/p/dir-b"]), Some(PathBuf::from("/p")));
+        assert_eq!(roots(&["/p", "/p/src"]), Some(PathBuf::from("/p")));
+        assert_eq!(roots(&["/p/src"]), Some(PathBuf::from("/p/src")));
+        assert_eq!(roots(&["/a/x", "/b/y"]), Some(PathBuf::from("/")));
+        assert_eq!(roots(&[]), None);
     }
 
     #[test]
