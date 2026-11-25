@@ -698,18 +698,18 @@ fn files_of_one_name_in_two_scan_paths_keep_their_folders() {
     let billing = demo.join("billing");
     let (json, _) = scan_json(&demo.join("returns"), &out, &[billing.to_str().unwrap()]);
     let _ = std::fs::remove_dir_all(&out);
-    let names: Vec<(&str, &str)> = json["duplicates"]
+    // Windows writes its own separator.
+    let name = |file: &serde_json::Value| file["name"].as_str().unwrap().replace('\\', "/");
+    let names: Vec<(String, String)> = json["duplicates"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|d| {
-            (
-                d["firstFile"]["name"].as_str().unwrap(),
-                d["secondFile"]["name"].as_str().unwrap(),
-            )
-        })
+        .map(|d| (name(&d["firstFile"]), name(&d["secondFile"])))
         .collect();
-    assert_eq!(names, [("billing/rates.js", "returns/rates.js")]);
+    assert_eq!(
+        names,
+        [("billing/rates.js".into(), "returns/rates.js".into())]
+    );
 }
 
 /// Type-2 detection (issue #998): renamed identifiers are only a clone with
