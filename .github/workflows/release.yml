@@ -198,7 +198,8 @@ jobs:
     uses: ./.github/workflows/crates-publish.yml
     with:
       version: ${{ needs.rust-version.outputs.version }}
-    secrets: inherit
+    secrets:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     permissions:
       contents: read
       id-token: write
@@ -211,7 +212,8 @@ jobs:
     uses: ./.github/workflows/npm-rust-publish.yml
     with:
       version: ${{ needs.rust-version.outputs.version }}
-    secrets: inherit
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     permissions:
       contents: read
       id-token: write

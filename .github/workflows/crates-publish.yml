@@ -6,6 +6,10 @@ on:
       version:
         required: true
         type: string
+    secrets:
+      # Fallback for the publish step when trusted publishing returns no token.
+      CARGO_REGISTRY_TOKEN:
+        required: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
