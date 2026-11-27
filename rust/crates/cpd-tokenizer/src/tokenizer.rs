@@ -548,6 +548,14 @@ fn normalized_value(
     }
 }
 
+/// `#` and 3, 4, 6 or 8 hex digits, as the style sheet tokenizer reads a
+/// color. Other literals that start with `#` keep their value.
+fn is_hex_color(value: &str) -> bool {
+    value.strip_prefix('#').is_some_and(|digits| {
+        matches!(digits.len(), 3 | 4 | 6 | 8) && digits.bytes().all(|b| b.is_ascii_hexdigit())
+    })
+}
+
 /// `$str` for quoted literals (with an optional short alphabetic prefix such
 /// as Python's `r"..."` or C#'s `@"..."`), `$num` for numbers and the hex
 /// colors of style sheets (`#fee3c909`), `None` for anything else (`true`,
@@ -558,7 +566,7 @@ fn literal_placeholder(value: &str) -> Option<&'static str> {
     if matches!(first, b'"' | b'\'' | b'`') {
         return Some("$str");
     }
-    if first.is_ascii_digit() || first == b'#' {
+    if first.is_ascii_digit() || is_hex_color(value) {
         return Some("$num");
     }
     if first == b'.' && bytes.get(1).is_some_and(u8::is_ascii_digit) {
@@ -1296,6 +1304,8 @@ mod tests {
         let a = det("a { color: #fee3c909; }", "css", &opts);
         let b = det("a { color: #e9eaf71a; }", "css", &opts);
         assert_eq!(hashes(&a), hashes(&b), "colors fold like numbers");
+        assert_eq!(literal_placeholder("#t"), None, "only a color is a number");
+        assert_eq!(literal_placeholder("#\"re\""), None);
     }
 
     #[test]
