@@ -686,6 +686,32 @@ fn a_clone_is_not_reported_again_over_its_own_lines() {
     assert_eq!(lines, [(1, 44), (49, 103)]);
 }
 
+/// Two scan paths with a file of one name each: the report tells them apart
+/// by their folders (#1324).
+#[test]
+fn files_of_one_name_in_two_scan_paths_keep_their_folders() {
+    if maybe_bin().is_none() {
+        return;
+    }
+    let demo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/same-name-demo");
+    let out = std::env::temp_dir().join(format!("cpd-same-name-{}", std::process::id()));
+    let billing = demo.join("billing");
+    let (json, _) = scan_json(&demo.join("returns"), &out, &[billing.to_str().unwrap()]);
+    let _ = std::fs::remove_dir_all(&out);
+    // Windows writes its own separator.
+    let name = |file: &serde_json::Value| file["name"].as_str().unwrap().replace('\\', "/");
+    let names: Vec<(String, String)> = json["duplicates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| (name(&d["firstFile"]), name(&d["secondFile"])))
+        .collect();
+    assert_eq!(
+        names,
+        [("billing/rates.js".into(), "returns/rates.js".into())]
+    );
+}
+
 /// Type-2 detection (issue #998): renamed identifiers are only a clone with
 /// `--ignore-identifiers`, and such a clone is reported as `kind: renamed`
 /// while an exact copy in the same run stays `kind: exact`.
