@@ -36,7 +36,7 @@ stacker = "0.1"
 # Functions of the languages below (one tree-sitter grammar each)
 tree-sitter = "0.27"
 tree-sitter-c = "0.24"
-tree-sitter-c-sharp = "0.23"
+tree-sitter-c-sharp = "0.24"
 tree-sitter-cpp = "0.23"
 tree-sitter-go = "0.25"
 tree-sitter-java = "0.23"
