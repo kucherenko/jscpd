@@ -11,6 +11,16 @@ pub fn repo_root() -> std::path::PathBuf {
         .to_path_buf()
 }
 
+/// Run git in `dir` with [`git_in`]; panics unless it succeeds.
+pub fn git(dir: &std::path::Path, args: &[&str]) {
+    let output = git_in(dir, args);
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 /// Run git in `dir` with identity/signing config that works on any machine.
 pub fn git_in(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
     std::process::Command::new("git")

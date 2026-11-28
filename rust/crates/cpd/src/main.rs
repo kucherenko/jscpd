@@ -622,6 +622,8 @@ fn run_config(opts: &Options, paths: &[PathBuf]) -> RunConfig {
         passes: Vec::new(),
         // Only the detection run narrows; see `detect_and_report`.
         only_files: None,
+        // Only the detection run narrows; see `detect_and_report`.
+        focus_files: None,
         skip_files: Vec::new(),
         match_as: Vec::new(),
     }
@@ -775,14 +777,25 @@ fn detect_and_report(
         None => None,
     };
     // --changed-only scans the changed files alone; a baseline of HEAD still
-    // takes every file.
-    let narrowed = changed
-        .as_ref()
-        .filter(|_| opts.changed_only)
-        .map(|changed| RunConfig {
-            only_files: Some(changed.files()),
+    // takes every file. --changed reports the clones of the changed files,
+    // so the semantic pass pairs their functions only (issue #1303), unless
+    // the clones of this run make a baseline: --update-baseline writes all
+    // of them, and a clean tree builds the baseline of HEAD from them.
+    let narrowed = changed.as_ref().and_then(|changed| {
+        if opts.changed_only {
+            return Some(RunConfig {
+                only_files: Some(changed.files()),
+                ..semantic_config.clone()
+            });
+        }
+        let whole = opts.update_baseline
+            || (opts.baseline_from_ref.is_none()
+                && changed.builds_baseline_from_run(&changed.scan_key(&scan_options(opts))));
+        (!semantic_config.passes.is_empty() && !whole).then(|| RunConfig {
+            focus_files: Some(changed.files()),
             ..semantic_config.clone()
-        });
+        })
+    });
     // The working tree's dead code, for the health of the series' last
     // point: analyzed beside the clone scan as a commit's is, unless
     // --workers holds the run to its threads; then after the run is timed.
