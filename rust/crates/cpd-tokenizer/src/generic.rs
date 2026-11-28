@@ -122,6 +122,11 @@ fn classify_word(word: &str) -> TokenKind {
     TokenKind::Identifier
 }
 
+/// Whether `format` writes a color as `#` and hex digits, as in `#fee3c909`.
+fn has_hex_colors(format: &str) -> bool {
+    matches!(format, "css" | "less" | "sass" | "scss" | "stylus")
+}
+
 /// A line being cut into tokens: its characters, how far the cut has reached,
 /// and the column that position sits at. Columns count UTF-8 bytes, as token
 /// offsets do.
@@ -256,6 +261,26 @@ impl<'a> LineCursor<'a> {
         };
         self.emit_from(kind, start, start_col);
     }
+
+    /// The length of the hex color at the cursor, which sits on a `#` in the
+    /// value of a declaration: 3, 4, 6 or 8 hex digits follow it, and no
+    /// other character of a name, so an id selector such as `#add-button` is
+    /// none. A `{` before the next `;` or `}` makes it a selector, as in
+    /// `a:hover #add {`.
+    fn hex_color_len(&self) -> Option<usize> {
+        // Nine digits are no color already, no need to read further.
+        let digits = (1..=9)
+            .take_while(|&ahead| self.peek(ahead).is_some_and(|c| c.is_ascii_hexdigit()))
+            .count();
+        let name_goes_on = self
+            .peek(1 + digits)
+            .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '-');
+        let opens_block = self.chars[self.at..]
+            .iter()
+            .find(|&&(_, c)| matches!(c, ';' | '{' | '}'))
+            .is_some_and(|&(_, c)| c == '{');
+        (matches!(digits, 3 | 4 | 6 | 8) && !name_goes_on && !opens_block).then_some(1 + digits)
+    }
 }
 
 /// Whether a line comment in this style starts at the cursor.
@@ -281,6 +306,8 @@ fn tokenize_line_content(
     style: CommentStyle,
     in_ignore: bool,
     in_block_comment: &mut bool,
+    // In a style sheet, whether the cursor is in the value of a declaration.
+    mut in_value: Option<&mut bool>,
 ) -> Vec<Token> {
     let mut cursor = LineCursor::new(line, line_num, line_offset, in_ignore);
     let c_style = style == CommentStyle::CStyle;
@@ -306,7 +333,23 @@ fn tokenize_line_content(
             });
         } else if ch.is_alphabetic() || ch == '_' {
             cursor.take_word();
+        } else if ch == '#'
+            && in_value.as_deref() == Some(&true)
+            && let Some(len) = cursor.hex_color_len()
+        {
+            // Read as `#` and a word, `#fee3c909` was a name, which
+            // `--ignore-identifiers` renames: a list of colors then matched
+            // itself one line down.
+            cursor.take(cursor.kind(TokenKind::Literal), len);
         } else {
+            // A value runs from a `:` to the end of its declaration or block.
+            if let Some(in_value) = in_value.as_deref_mut() {
+                match ch {
+                    ':' => *in_value = true,
+                    ';' | '{' | '}' => *in_value = false,
+                    _ => {}
+                }
+            }
             cursor.take(cursor.kind(TokenKind::Punctuation), 1);
         }
     }
@@ -344,9 +387,11 @@ pub fn tokenize_generic(source: &str, format: &str) -> Vec<Token> {
     }
 
     let style = comment_style(format);
+    let hex_colors = has_hex_colors(format);
     let mut tokens = Vec::new();
     let mut in_ignore = false;
     let mut in_block_comment = false;
+    let mut in_value = false;
     let mut offset = 0u32;
 
     // `split_inclusive` keeps each line's ending, so offsets advance by the
@@ -376,6 +421,7 @@ pub fn tokenize_generic(source: &str, format: &str) -> Vec<Token> {
             style,
             in_ignore,
             &mut in_block_comment,
+            hex_colors.then_some(&mut in_value),
         );
         tokens.extend(line_tokens);
         offset += raw.len() as u32;
@@ -580,6 +626,73 @@ The next line.
             assert!(comment_lines(source, format).is_empty(), "{format}");
             let tokens = tokenize_generic(source, format);
             assert_eq!(tokens.last().map(|t| t.start.line), Some(2), "{format}");
+        }
+    }
+
+    #[test]
+    fn a_hex_color_is_one_literal_in_style_sheets() {
+        for format in ["css", "less", "sass", "scss", "stylus"] {
+            for color in ["#fff", "#FFFF", "#fee3c9", "#fee3c909", "#9b1c0002"] {
+                let source = format!("a {{ color: {color}; }}\n");
+                let tokens = tokenize_generic(&source, format);
+                assert!(
+                    tokens
+                        .iter()
+                        .any(|t| t.kind == TokenKind::Literal && t.value == color),
+                    "{format}: {color} must be one literal"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_id_selector_or_interpolation_is_not_a_hex_color() {
+        for (format, source) in [
+            ("css", "#header { margin: 0; }"),
+            ("css", "#add-button { margin: 0; }"),
+            ("css", "#fade_in { margin: 0; }"),
+            ("css", "#a1b2c { margin: 0; }"),
+            ("scss", "#{$name} { margin: 0; }"),
+            // Ids spelled in hex digits only.
+            ("css", "#add { margin: 0; }"),
+            ("css", "#bad, #cafe { margin: 0; }"),
+            ("css", "#bad,\n#cafe {\n  margin: 0;\n}"),
+            ("css", "a { color: red; }\n#c0ffee { margin: 0; }"),
+            ("css", "a:hover #fade { margin: 0; }"),
+            ("css", "#abc\\:hover { margin: 0; }"),
+            ("scss", "a { &:hover #feed { margin: 0; } }"),
+            ("css", "a { color: #0123456789; }"),
+        ] {
+            let tokens = tokenize_generic(&format!("{source}\n"), format);
+            assert!(
+                !tokens
+                    .iter()
+                    .any(|t| t.kind == TokenKind::Literal && t.value.starts_with('#')),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_hex_color_is_read_wherever_a_value_goes() {
+        for (format, source, color) in [
+            (
+                "css",
+                "a {\n  box-shadow:\n    0 0 2px #fee3c9,\n    0 1px #000;\n}",
+                "#000",
+            ),
+            ("scss", "$tint: #fee3c909;", "#fee3c909"),
+            ("less", "@tint: #fff;", "#fff"),
+            ("scss", "a { color: darken(#fee3c9, 10%); }", "#fee3c9"),
+            ("css", "#add { color: #add; }", "#add"),
+        ] {
+            let tokens = tokenize_generic(&format!("{source}\n"), format);
+            let colors: Vec<_> = tokens
+                .iter()
+                .filter(|t| t.kind == TokenKind::Literal && t.value.starts_with('#'))
+                .map(|t| t.value.as_str())
+                .collect();
+            assert!(colors.contains(&color), "{source}: {colors:?}");
         }
     }
 
